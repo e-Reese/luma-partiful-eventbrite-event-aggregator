@@ -5,3 +5,4 @@ export {
   browseGoto, browseHtml, browseEval, parseBrowseOutput,
   cookiePostJson, readCookieHeader, readCsrfToken, csrfFromCookies,
 } from './browse.js';
+export { collectEventbrite } from './collector.js';

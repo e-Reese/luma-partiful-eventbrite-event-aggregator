@@ -7,6 +7,8 @@ import { runCycle, type Collector } from '../src/cycle.js';
 import { httpGetJson, httpGetText } from '../src/http.js';
 import { fetchLuma, normalizeLuma } from '../src/sources/luma/index.js';
 import { fetchPartiful, normalizePartiful } from '../src/sources/partiful/index.js';
+import { collectEventbrite } from '../src/sources/eventbrite/collector.js';
+import { normalizeEventbrite } from '../src/sources/eventbrite/index.js';
 
 const SF_LAT = Number(process.env.SF_LAT ?? 37.7749);
 const SF_LNG = Number(process.env.SF_LNG ?? -122.4194);
@@ -21,6 +23,11 @@ const collectors: Collector[] = [
     source: 'partiful',
     fetch: () => fetchPartiful({ region: 'sf', getText: httpGetText, getJson: httpGetJson }),
     normalize: normalizePartiful,
+  },
+  {
+    source: 'eventbrite',
+    fetch: collectEventbrite,
+    normalize: normalizeEventbrite,
   },
 ];
 
