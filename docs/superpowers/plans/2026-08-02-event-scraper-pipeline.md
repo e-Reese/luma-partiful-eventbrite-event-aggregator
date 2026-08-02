@@ -1370,7 +1370,30 @@ describe('evaluateRun', () => {
       expectedCount: 67,
     }));
     expect(report.coveragePct).toBeCloseTo(0.7761, 3);
-    expect(report.status).toBe('ok'); // 0.776 clears the 0.75 Partiful floor
+    expect(report.status).toBe('ok');
+  });
+
+  it('accepts Partiful real-world coverage — 41 of 65 measured live is healthy, not degraded', () => {
+    const report = evaluateRun(result({
+      source: 'partiful',
+      records: Array.from({ length: 41 }, (_, i) => ({
+        source: 'partiful' as const, sourceEventId: `p${i}`, payload: {},
+      })),
+      expectedCount: 65,
+    }));
+    expect(report.coveragePct).toBeCloseTo(0.6308, 3);
+    expect(report.status).toBe('ok');
+  });
+
+  it('degrades when a Partiful pool disappears — losing feedItems lands near 0.43', () => {
+    const report = evaluateRun(result({
+      source: 'partiful',
+      records: Array.from({ length: 28 }, (_, i) => ({
+        source: 'partiful' as const, sourceEventId: `p${i}`, payload: {},
+      })),
+      expectedCount: 65,
+    }));
+    expect(report.status).toBe('degraded');
   });
 
   it('degrades when coverage falls below the source floor', () => {
@@ -1393,7 +1416,7 @@ describe('evaluateRun', () => {
   });
 
   it('exposes the configured floors', () => {
-    expect(COVERAGE_FLOORS.partiful).toBe(0.75);
+    expect(COVERAGE_FLOORS.partiful).toBe(0.5);
     expect(COVERAGE_FLOORS.luma).toBe(1);
     expect(VOLUME_DROP_THRESHOLD).toBe(0.4);
   });
@@ -1412,12 +1435,21 @@ import type { FetchResult, RunReport, RunStatus, SourceName } from './types.js';
 
 /**
  * Minimum acceptable fetched/expected ratio, per source.
- * Sources that can prove exhaustion are held to 1.0; Partiful's single page
- * returns roughly 52 of a reported 67, so its floor sits just below that.
+ *
+ * Sources that can prove exhaustion are held to 1.0.
+ *
+ * Partiful is held to 0.50. Measured live on 2026-08-02, one page load yields 41
+ * unique events against a self-reported 65 — coverage 0.63, and that is the
+ * ceiling, not a shortfall, because the four pools overlap and a single load
+ * cannot see the whole region. A floor at or above 0.63 would mark every healthy
+ * run degraded and train the operator to ignore the alert. A much lower floor
+ * would miss the failure that matters: losing a pool. Dropping `feedItems` lands
+ * near 0.43 and dropping `sections[]` near 0.38, so 0.50 separates those from
+ * normal feed rotation.
  */
 export const COVERAGE_FLOORS: Record<SourceName, number> = {
   luma: 1,
-  partiful: 0.75,
+  partiful: 0.5,
   eventbrite: 1,
 };
 

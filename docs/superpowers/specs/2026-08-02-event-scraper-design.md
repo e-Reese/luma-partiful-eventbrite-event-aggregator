@@ -66,10 +66,16 @@ GET https://partiful.com/_next/data/<buildId>/explore/sf.json   # 200, ~148KB JS
 
 | Pool | Count (SF) |
 |---|---|
-| `trendingSection.items` | 5 |
-| `sections[].items` (3 curated carousels) | 9 + 11 + 7 |
+| `trendingSection.items` | 8 |
+| `sections[].items` (3 curated carousels) | 26 |
 | `feedItems` | 20 |
-| **Union, deduped by id** | **~52** |
+| Raw sum | 54 |
+| **Union, deduped by `event.id`** | **41** (13 discarded as overlap) |
+
+The pools overlap heavily — roughly a quarter of the raw items are repeats. Measure the
+deduped union, never the raw sum. An earlier draft of this document reported ~52 by summing
+the pools without deduplicating, which overstated achievable coverage and would have set the
+alert floor above what the source can actually deliver.
 
 Event object fields:
 `id, title, description, locationInfo{type,hasPostCode,mapsInfo{name,addressLines}}, startDate, endDate, timezone, ownerIds[], interestedGuestCount, goingGuestCount, approvedGuestCount, maybeGuestCount, waitlistGuestCount, showGuestCount, isPublic, status, image, displaySettings`
@@ -147,7 +153,7 @@ This is the mechanism that makes "as close to all events as possible" measurable
 
 | Source | Oracle | Check | Observed 2026-08-02 |
 |---|---|---|---|
-| Partiful | `regionEventCounts.SF` | `fetched / reported` ≥ floor | 52 / 67 = 0.78 |
+| Partiful | `regionEventCounts.SF` | `fetched / reported` ≥ floor | 41 / 65 = 0.63 |
 | Luma | `has_more` / `next_cursor` | terminated because `has_more === false`, not from an error, a stuck cursor, or a page cap | 779 over 17 pages, clean |
 | Eventbrite | result total in search response | `sum(pages) === total` | not yet measured |
 
@@ -172,7 +178,15 @@ pagination_terminated_cleanly, error, drift_signals jsonb
 ```
 
 Rules:
-- `coverage_pct` below a per-source floor → the run is marked degraded and the claw is notified. Floor starts at 0.75 for Partiful (current observed ~52/67 ≈ 0.78) and 1.0 for the two sources that can prove exhaustion.
+- `coverage_pct` below a per-source floor → the run is marked degraded and the claw is notified. Floor is **0.50 for Partiful** and 1.0 for the two sources that can prove exhaustion.
+
+  The Partiful floor deserves its reasoning recorded, because getting it wrong makes the
+  oracle useless in either direction. Observed coverage is 0.63, and that is the *ceiling*,
+  not a shortfall to fix — a single page load simply cannot see all 65 events. A floor set
+  at or above 0.63 marks every healthy run degraded, and an oracle that fires every cycle
+  trains you to ignore it. A floor much below 0.50 misses the failure that actually matters:
+  losing a pool. Dropping `feedItems` takes coverage to roughly 0.43 and dropping
+  `sections[]` to roughly 0.38, so 0.50 catches either while tolerating normal feed rotation.
 - A cursor loop that exits for any reason other than `has_more === false` is a failure, never a success with fewer rows.
 - **Zero results is always an error, never an empty city.** This single rule catches most silent breaks.
 
@@ -266,7 +280,7 @@ Fixtures are frozen sample responses committed to the repo. `vitest` asserts tha
 
 | Gap | Impact | Mitigation |
 |---|---|---|
-| Partiful ~52/67 on a single load | ~22% of SF events unseen per cycle | The feed rotates; accumulating across 3-hourly cycles should close most of it. Measure via `coverage_pct` before building anything more elaborate |
+| Partiful 41/65 on a single load | ~37% of SF events unseen per cycle | The feed rotates; accumulating across 3-hourly cycles should close most of it. Measure via `coverage_pct` before building anything more elaborate |
 | Luma is radius-based, not city-bounded | 779 SF-query events span the whole Bay Area (500 actually in SF) | Retain `geo_address_info.city` per event; treat the city boundary as a query-time filter, never a collection-time one |
 | Source volumes are wildly unequal | Luma 779 vs Partiful 67 — naive "events per city" analysis would read as a Luma-dominated world | Always segment trend queries by source; never aggregate raw counts across platforms without normalising |
 | Luma descriptions absent from discovery | Weaker text for tagging/search | Accepted for v1. Per-event fetch is 429-prone; if needed later, do it slowly for a subset |
