@@ -1512,7 +1512,7 @@ export function evaluateRun(result: FetchResult, opts: EvaluateOptions = {}): Ru
 - [ ] **Step 4: Run test to verify it passes**
 
 Run: `npx vitest run test/oracle.test.ts`
-Expected: PASS — 9 tests
+Expected: PASS — 11 tests
 
 - [ ] **Step 5: Commit**
 
