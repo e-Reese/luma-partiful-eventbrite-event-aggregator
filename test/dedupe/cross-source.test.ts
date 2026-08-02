@@ -37,8 +37,28 @@ describe('classifyPair', () => {
   });
 
   it('matches on high title similarity plus time and geo proximity', () => {
+    // 'Rooftop Sunset Party SF' scores 0.875 against the base title.
+    const a = ev({ source: 'luma', title: 'Rooftop Sunset Party' });
+    const b = ev({ source: 'partiful', title: 'Rooftop Sunset Party SF', lat: 37.7752, lng: -122.4190 });
+    expect(classifyPair(a, b)).toBe('same');
+  });
+
+  // Trigram Jaccard is length-sensitive: the same ' 2026' suffix scores 0.808 on a
+  // 20-char title but 0.891 on a 40-char one. Short titles therefore need a near-exact
+  // match to merge. That is the intended conservative behaviour, and this test pins it
+  // so the threshold is not quietly lowered later to make a short-title pair merge.
+  it('leaves a short title with a year suffix ambiguous rather than merging it', () => {
     const a = ev({ source: 'luma', title: 'Rooftop Sunset Party' });
     const b = ev({ source: 'partiful', title: 'Rooftop Sunset Party 2026', lat: 37.7752, lng: -122.4190 });
+    expect(titleSimilarity(a.title, b.title)).toBeCloseTo(0.8077, 3);
+    expect(classifyPair(a, b)).toBe('ambiguous');
+  });
+
+  it('merges the same suffix on a long title, where similarity survives', () => {
+    const long = 'Annual Chinatown Night Market Photo Walk';
+    const a = ev({ source: 'luma', title: long });
+    const b = ev({ source: 'partiful', title: `${long} 2026`, lat: 37.7752, lng: -122.4190 });
+    expect(titleSimilarity(a.title, b.title)).toBeGreaterThanOrEqual(0.85);
     expect(classifyPair(a, b)).toBe('same');
   });
 

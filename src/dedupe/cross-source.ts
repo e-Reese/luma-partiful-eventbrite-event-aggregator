@@ -4,6 +4,23 @@ export type PairVerdict = 'same' | 'ambiguous' | 'different';
 
 const TIME_WINDOW_MS = 30 * 60 * 1000; // ±30 minutes
 const GEO_RADIUS_M = 500;
+
+/**
+ * Tier-2 title-similarity cut, on trigram Jaccard.
+ *
+ * Note this metric is length-sensitive: appending ' 2026' scores 0.808 against a
+ * 20-character title but 0.891 against a 40-character one. So 0.85 means short
+ * titles must match near-exactly while longer ones tolerate a suffix — which is
+ * the right bias, since a short title carries less distinguishing signal.
+ *
+ * Measured on the live corpus 2026-08-02 (783 Luma + 42 Partiful + 996
+ * Eventbrite = 1821 events): **zero** cross-source pairs overlap in time with
+ * even 0.30 title similarity. Cross-posting between these three platforms is
+ * rare to non-existent — they serve largely disjoint communities. The exact cut
+ * point is therefore currently untested by production data, so it is set
+ * conservatively on the principle that a wrong merge destroys data while a
+ * missed merge only defers it.
+ */
 const TITLE_SIMILARITY_THRESHOLD = 0.85;
 
 export function normalizeTitle(title: string): string {

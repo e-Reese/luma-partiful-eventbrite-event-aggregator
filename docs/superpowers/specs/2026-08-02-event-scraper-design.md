@@ -253,6 +253,13 @@ Two distinct problems, handled differently.
 
 Only tier 3 reaches a model. It is expected to be a small fraction, and every LLM decision is written back with its reasoning so it can be audited and reversed. A wrong merge is worse than a missed merge, so the agent's instruction is to default to "not the same event" under uncertainty.
 
+**Measured 2026-08-02: cross-posting is rare to the point of absence.** Across a full live corpus of 1,821 events (783 Luma + 42 Partiful + 996 Eventbrite), **zero** cross-source pairs overlapped in time with even 0.30 title similarity. The three platforms serve largely disjoint communities — Luma skews tech and professional, Partiful social and invite-driven, Eventbrite ticketed and commercial. Two consequences:
+
+- The tier thresholds are currently unexercised by production data. They are set conservatively rather than empirically, and the 0.85 title cut in particular has never fired on a real pair.
+- Cross-source merging is **not** on the critical path for this dataset, and the deferred merge-writer (§ follow-on work) is lower priority than it appeared at design time. Re-measure before investing in it.
+
+One property of the metric is worth recording because it looks like a bug and is not: trigram Jaccard is length-sensitive. Appending ` 2026` scores 0.808 against a 20-character title but 0.891 against a 40-character one, so short titles must match near-exactly to merge while longer ones tolerate suffixes.
+
 ---
 
 ## 7. Drift detection
