@@ -81,21 +81,24 @@ Event object fields:
 `id, title, description, locationInfo{type,hasPostCode,mapsInfo{name,addressLines}}, startDate, endDate, timezone, ownerIds[], interestedGuestCount, goingGuestCount, approvedGuestCount, maybeGuestCount, waitlistGuestCount, showGuestCount, isPublic, status, image, displaySettings`
 
 Notes:
-- `pageProps.regionEventCounts` reports **SF = 67** (also NYC 102, LA 107, CHI 38, DC 27, BOS 25, ATX 24, MIA 9, LON 1). This is our completeness oracle — see §4.
+- `pageProps.regionEventCounts` is our completeness oracle (see §4). Point-in-time readings on 2026-08-02: **SF 67 → 65 → 64** across a few hours, alongside NYC 102, LA 107, CHI 38, DC 27, BOS 25, ATX 24, MIA 9, LON 1. It drifts continuously, so treat it as a live ratio denominator, never a fixed constant.
 - `pageProps.tags` has only three categories: `DISCOVER_HOME` ("All"), `COMMUNITY`, `ARTS`. The `?tag=` query param returns byte-identical payloads, so category filtering is client-side. One request retrieves the whole city regardless.
 - **`buildId` rotates on every Partiful deploy.** Current value at time of writing: `lQ8EngFIXMTxMGIl_INAM`. It must be re-scraped, never hardcoded. This is the single most likely cause of a silent break.
 - Events are marked `isPublic: true` and the surface is labelled by Partiful as "Public events you can crash." Page robots meta is `noimageindex` only, not `noindex`.
 
-### 2.3 Eventbrite — browser required
+### 2.3 Eventbrite — browser for cookies only
 
 ```
+# Browser session, once per cycle: yields placeId (SF = 85922583) + cookie jar
 GET  https://www.eventbrite.com/d/ca--san-francisco/events/   # __SERVER_DATA__ → placeId
-                                                              # also embeds first result page
+
+# Then plain Node POSTs, replaying those cookies
 POST https://www.eventbrite.com/api/v3/destination/search/
-  Headers: X-CSRFToken: <csrftoken cookie>, X-Requested-With: XMLHttpRequest
+  Headers: X-CSRFToken: <csrftoken from cookie jar>, X-Requested-With: XMLHttpRequest,
+           Cookie: <full document.cookie>, Origin: https://www.eventbrite.com, browser UA
   Body: { browse_surface: "search",
           event_search: { places: ["<placeId>"], dates: ["current_future"],
-                          dedup: true, page: N, page_size: 20 },
+                          dedup: true, page: N, page_size: 50 },
           "expand.destination_event": [ "primary_venue", "image", "ticket_availability",
                                         "event_sales_status", "primary_organizer" ] }
 ```
