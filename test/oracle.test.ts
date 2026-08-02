@@ -97,9 +97,33 @@ describe('evaluateRun', () => {
     expect(report.status).toBe('degraded');
   });
 
+  it('accepts an Eventbrite full drain — 996 of a reported 1000 is complete, not degraded', () => {
+    const report = evaluateRun(result({
+      source: 'eventbrite',
+      records: Array.from({ length: 996 }, (_, i) => ({
+        source: 'eventbrite' as const, sourceEventId: `e${i}`, payload: {},
+      })),
+      expectedCount: 1000,
+    }));
+    expect(report.coveragePct).toBeCloseTo(0.996, 3);
+    expect(report.status).toBe('ok');
+  });
+
+  it('degrades an Eventbrite run that stops well short of the reported total', () => {
+    const report = evaluateRun(result({
+      source: 'eventbrite',
+      records: Array.from({ length: 500 }, (_, i) => ({
+        source: 'eventbrite' as const, sourceEventId: `e${i}`, payload: {},
+      })),
+      expectedCount: 1000,
+    }));
+    expect(report.status).toBe('degraded');
+  });
+
   it('exposes the configured floors', () => {
     expect(COVERAGE_FLOORS.partiful).toBe(0.5);
     expect(COVERAGE_FLOORS.luma).toBe(1);
+    expect(COVERAGE_FLOORS.eventbrite).toBe(0.95);
     expect(VOLUME_DROP_THRESHOLD).toBe(0.4);
   });
 });

@@ -1,8 +1,25 @@
 import type { FetchResult, RawRecord, Termination } from '../../types.js';
+import { sleep } from '../../http.js';
 
 const SEARCH_URL = 'https://www.eventbrite.com/api/v3/destination/search/';
-const PAGE_SIZE = 20;
-const MAX_PAGES = 100;
+
+/**
+ * 50 is the server-side maximum. Verified 2026-08-02: requesting 100 or 200
+ * silently returns 50, with `pagination.page_size` echoing 50 — no error, so a
+ * larger value would just mean the loop quietly needs more pages than expected.
+ */
+const PAGE_SIZE = 50;
+
+/**
+ * SF reports `object_count` 4413, so a full drain is ~89 pages at 50 per page.
+ * The cap sits well above that: reaching it means the corpus grew a lot or
+ * pagination broke, and either way `page_cap` is the honest answer rather than
+ * silently returning a truncated set as success.
+ */
+const MAX_PAGES = 250;
+
+/** Matches the Luma fetcher's inter-page delay. */
+const DELAY_MS = 300;
 
 export interface HttpPostJson {
   (url: string, body: unknown, headers: Record<string, string>): Promise<unknown>;
@@ -20,10 +37,14 @@ export interface FetchEventbriteOptions {
   csrfToken: string;
   post: HttpPostJson;
   maxPages?: number;
+  pageSize?: number;
+  delayMs?: number;
 }
 
 export async function fetchEventbrite(opts: FetchEventbriteOptions): Promise<FetchResult> {
   const maxPages = opts.maxPages ?? MAX_PAGES;
+  const pageSize = opts.pageSize ?? PAGE_SIZE;
+  const delayMs = opts.delayMs ?? DELAY_MS;
   const byId = new Map<string, RawRecord>();
   let termination: Termination = { kind: 'page_cap' };
   let expectedCount: number | null = null;
@@ -44,7 +65,7 @@ export async function fetchEventbrite(opts: FetchEventbriteOptions): Promise<Fet
         dates: ['current_future'],
         dedup: true,
         page,
-        page_size: PAGE_SIZE,
+        page_size: pageSize,
       },
       'expand.destination_event': [
         'primary_venue', 'image', 'ticket_availability',
@@ -75,6 +96,8 @@ export async function fetchEventbrite(opts: FetchEventbriteOptions): Promise<Fet
       termination = { kind: 'exhausted' };
       break;
     }
+
+    if (delayMs > 0) await sleep(delayMs);
   }
 
   return {

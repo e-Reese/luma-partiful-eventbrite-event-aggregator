@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import {
-  extractAppVersion, extractPlaceId, extractServerData,
+  extractAppVersion, extractPlaceId, extractServerData, parseBrowseOutput,
 } from '../../../src/sources/eventbrite/browse.js';
 
 const HTML = `<html><script>window.__SERVER_DATA__ = {"placeId":"85922583",
@@ -47,6 +47,35 @@ describe('extractServerData', () => {
 
   it('returns null when the marker is absent', () => {
     expect(extractServerData('<html></html>')).toBeNull();
+  });
+});
+
+// `browse js` prints objects/arrays/numbers/null as JSON but strings bare.
+// Verified against the binary 2026-08-02:
+//   js "'hello'"        -> hello
+//   js "42"             -> 42
+//   js "({a:1})"        -> {\n  "a": 1\n}
+//   js "null"           -> null
+describe('parseBrowseOutput', () => {
+  it('parses JSON objects', () => {
+    expect(parseBrowseOutput('{"a":1}')).toEqual({ a: 1 });
+  });
+
+  it('parses JSON arrays and numbers', () => {
+    expect(parseBrowseOutput('[1,2,3]')).toEqual([1, 2, 3]);
+    expect(parseBrowseOutput('42')).toBe(42);
+  });
+
+  it('parses null', () => {
+    expect(parseBrowseOutput('null')).toBeNull();
+  });
+
+  it('returns bare strings unchanged instead of throwing — the csrftoken case', () => {
+    expect(parseBrowseOutput('FTxIdHxlsLabc123')).toBe('FTxIdHxlsLabc123');
+  });
+
+  it('trims surrounding whitespace from a bare string', () => {
+    expect(parseBrowseOutput('  token123\n')).toBe('token123');
   });
 });
 

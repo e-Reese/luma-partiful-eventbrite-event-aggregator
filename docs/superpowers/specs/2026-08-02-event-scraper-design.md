@@ -101,7 +101,11 @@ POST https://www.eventbrite.com/api/v3/destination/search/
 ```
 
 Notes:
-- Server-side calls are **WAF-blocked**. This source must run through a real browser session that holds the `csrftoken` cookie. The gstack `browse` daemon is that bridge.
+- **Server-side calls are NOT WAF-blocked.** Third-party recon notes claim they are, and an earlier draft of this document repeated that. Verified false on 2026-08-02: a plain Node POST carrying the browser session's cookie jar, the `csrftoken` header and an `Origin` header returns HTTP 200 with full results. The browser is needed only to *obtain* cookies and the `placeId` — never to issue requests.
+- The in-page alternative does not work anyway: the gstack `browse` binary's `js` command returns empty output for any expression containing `fetch`, because it does not await network promises. Multi-line and async expressions are otherwise fine.
+- **`page_size` caps at 50.** Requesting 100 or 200 silently returns 50 with `pagination.page_size` echoing 50 — no error.
+- **The endpoint exposes only ~1000 results per query.** A full SF drain returns 996 unique events over 21 pages. `object_count` is soft and varies with page size — 4413 at page_size 5 or 20, 1000 at page_size 50 — because the accessible window is capped. So SF genuinely holds ~4413 Eventbrite events but this query surfaces roughly a quarter of them. Reaching the rest requires partitioning the search (by date range or category) into windows that each fall under the cap. Deliberately not attempted in v1; recorded as the largest known coverage gap.
+- Coverage floor is 0.95, not 1.0: server-side `dedup: true` plus our own id dedup means a healthy complete drain lands at 0.996, and a 1.0 floor would mark every successful run degraded.
 - Searches take internal place ids, never place names. Resolve `placeId` once from the browse page and cache it. Verified live 2026-08-02: SF resolves to `85922583`.
 - Request shapes were captured from live traffic on 2026-07-30 against `web_app discover v10.14.65`. **The live version is already `10.14.68`** as of 2026-08-02 — recorded as a drift signal, with no coverage impact observed. This is what the drift channel is for; a version move only becomes actionable when paired with a coverage drop.
 - **The SSR page does NOT embed a first page of results.** An earlier draft of this document claimed `search_data.events` was present on the browse page, taken from third-party recon notes without verification. The live payload has 50 top-level keys and no `search_data` key at all — the event-shaped ones are `things_to_do_shelf`, `point_of_interest_shelf`, and `search_id`. Results come from the POST search API only; there is no free first page and no SSR fallback.
@@ -157,7 +161,7 @@ This is the mechanism that makes "as close to all events as possible" measurable
 |---|---|---|---|
 | Partiful | `regionEventCounts.SF` | `fetched / reported` ≥ floor | 41 / 65 = 0.63 |
 | Luma | `has_more` / `next_cursor` | terminated because `has_more === false`, not from an error, a stuck cursor, or a page cap | 779 over 17 pages, clean |
-| Eventbrite | result total in search response | `sum(pages) === total` | not yet measured |
+| Eventbrite | `pagination.object_count` (soft) | `fetched / reported` >= 0.95 | 996 / 1000 = 0.996 over 21 pages |
 
 The Luma cursor trap in §2.1 is the canonical example of what this section exists to catch. Both the broken and the correct implementation return HTTP 200 with well-formed JSON and plausible-looking events. Nothing short of comparing against an exhaustion proof distinguishes 45 from 779. A monitoring approach based on "did the job error?" reports success in both cases.
 

@@ -3,7 +3,16 @@ import type { FetchResult, RunReport, RunStatus, SourceName } from './types.js';
 /**
  * Minimum acceptable fetched/expected ratio, per source.
  *
- * Sources that can prove exhaustion are held to 1.0.
+ * Luma is held to 1.0 — it reports no total, so `expectedCount` is null and no
+ * coverage ratio is computed at all; exhaustion of its cursor is its proof.
+ *
+ * Eventbrite is held to 0.95. Measured live 2026-08-02: a clean full drain
+ * returns 996 unique events against a reported `object_count` of 1000 — the
+ * gap is server-side `dedup: true` plus our own id dedup, so 0.996 is what a
+ * healthy complete run looks like. A 1.0 floor marks every successful drain
+ * degraded. Note also that `object_count` is soft: the same query reports 4413
+ * at page_size 5 or 20 and 1000 at page_size 50, because the endpoint caps the
+ * accessible result window at ~1000. It is a sanity check, not an exact total.
  *
  * Partiful is held to 0.50. Measured live on 2026-08-02, one page load yields 41
  * unique events against a self-reported 65 — coverage 0.63, and that is the
@@ -17,7 +26,7 @@ import type { FetchResult, RunReport, RunStatus, SourceName } from './types.js';
 export const COVERAGE_FLOORS: Record<SourceName, number> = {
   luma: 1,
   partiful: 0.5,
-  eventbrite: 1,
+  eventbrite: 0.95,
 };
 
 /** A run losing more than this fraction vs the trailing median is degraded. */
