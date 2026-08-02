@@ -102,8 +102,10 @@ POST https://www.eventbrite.com/api/v3/destination/search/
 
 Notes:
 - Server-side calls are **WAF-blocked**. This source must run through a real browser session that holds the `csrftoken` cookie. The gstack `browse` daemon is that bridge.
-- Searches take internal place ids, never place names. Resolve `placeId` once from the browse page and cache it.
-- Shapes captured from live traffic on 2026-07-30 against `web_app discover v10.14.65`. This version string is a drift signal worth recording.
+- Searches take internal place ids, never place names. Resolve `placeId` once from the browse page and cache it. Verified live 2026-08-02: SF resolves to `85922583`.
+- Request shapes were captured from live traffic on 2026-07-30 against `web_app discover v10.14.65`. **The live version is already `10.14.68`** as of 2026-08-02 — recorded as a drift signal, with no coverage impact observed. This is what the drift channel is for; a version move only becomes actionable when paired with a coverage drop.
+- **The SSR page does NOT embed a first page of results.** An earlier draft of this document claimed `search_data.events` was present on the browse page, taken from third-party recon notes without verification. The live payload has 50 top-level keys and no `search_data` key at all — the event-shaped ones are `things_to_do_shelf`, `point_of_interest_shelf`, and `search_id`. Results come from the POST search API only; there is no free first page and no SSR fallback.
+- Parsing `window.__SERVER_DATA__` requires brace-counting to the matching close, not a regex anchored on `</script>`. The live page assigns several globals in one script block, so a lazy match runs past the object boundary. A regex version passed against a single-assignment fixture and returned null on every real page.
 
 ### 2.4 What was rejected
 
