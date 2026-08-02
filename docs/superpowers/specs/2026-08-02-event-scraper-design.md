@@ -288,7 +288,9 @@ Fixtures are frozen sample responses committed to the repo. `vitest` asserts tha
 | `buildId` rotation | Partiful breaks on every deploy | Never hardcoded; re-scrape and retry is routine |
 | Cross-posted events inflate counts | Trend analysis skewed | Handled by §6; `event_sources` preserves the fact that an event appeared on two platforms, which is itself a signal |
 
-Explicit uncertainty: the 52/67 gap has not been observed over time, only on one fetch. Whether accumulation closes it is the first empirical question the pipeline should answer, and it should be answered with data before any host-graph crawling or search-engine backfill is built.
+Explicit uncertainty: the 41/65 gap has been observed on single fetches only, never over time. Whether 3-hourly accumulation closes it is the first empirical question the pipeline should answer, and it should be answered with data before any host-graph crawling or search-engine backfill is built.
+
+The measurement history is itself a caution. The first pass at this number summed the four pools and reported 52; deduplicating gives 41. Every coverage figure in this document is a deduped unique count, and any future number quoted here should state which it is.
 
 ---
 

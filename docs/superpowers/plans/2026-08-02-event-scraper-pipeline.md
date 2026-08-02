@@ -3105,5 +3105,5 @@ The last check is the one that proves the time series works: run the cycle twice
 
 1. **NanoClaw supervisor** — reads `runs`, repairs drift, resolves `ambiguous` pairs, alerts on degraded coverage. Its own plan.
 2. **Cross-source merge writer** — `classifyPair` decides; nothing yet collapses two `event_sources` rows onto one `events` row. Deliberately deferred until real duplicate rates are measured.
-3. **The Partiful coverage gap** — measure whether 3-hourly accumulation closes 52/67 before building host-graph snowballing.
+3. **The Partiful coverage gap** — measure whether 3-hourly accumulation closes 41/65 before building host-graph snowballing.
 4. **Luma descriptions** — absent from discovery, and per-event fetches hit 429. Needs a slow, separate backfill job.
