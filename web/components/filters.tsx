@@ -11,17 +11,14 @@ interface Props {
 }
 
 /**
- * Search and sort are always visible; everything else hides behind a native
- * `<details>`.
+ * Search and sort sit on the top line; source, city and date range sit below in
+ * a `<details>` that is open by default.
  *
- * Eight controls competing at once made the top of the page look like a
- * database admin panel. Most visits are "what's on" — one field. `<details>` is
- * progressive disclosure with no client JavaScript, and it opens automatically
- * when a hidden filter is actually in use so active state is never invisible.
+ * Keeping it a `<details>` rather than a plain div means the reader can collapse
+ * it and the browser remembers nothing to go wrong — still no client JavaScript.
  */
 export function Filters({ q, sources, city, from, to, sort, cities }: Props) {
   const allSelected = sources.length === 0 || sources.length === SOURCES.length;
-  const advancedInUse = Boolean(city || from || to || !allSelected);
 
   return (
     <form method="get" className="border-b border-rule pb-4 pt-5">
@@ -55,9 +52,9 @@ export function Filters({ q, sources, city, from, to, sort, cities }: Props) {
         </button>
       </div>
 
-      <details open={advancedInUse} className="mt-2.5">
+      <details open className="mt-2.5">
         <summary className="inline-block text-[13px] text-faint hover:text-quiet">
-          Filters{advancedInUse ? ' ·' : ' +'}
+          Filters
         </summary>
 
         <div className="mt-2.5 flex flex-wrap items-center gap-x-5 gap-y-2 text-[13px] text-quiet">
