@@ -69,20 +69,20 @@ export default async function EventPage({
     <article className="pb-4">
       <Link
         href="/"
-        className="mt-5 inline-block font-mono text-[10.5px] uppercase tracking-[0.14em] text-quiet hover:text-accent"
+        className="mt-5 inline-block text-[13px] text-quiet hover:text-accent"
       >
-        ← the register
+        ← All events
       </Link>
 
       <header className="mt-6 border-b border-ink pb-5">
-        <p className="flex items-center gap-2 font-mono text-[10.5px] uppercase tracking-[0.12em] text-quiet">
+        <p className="flex items-center gap-2 text-[13px] text-quiet">
           <SourceMark sources={event.sources ?? []} />
           {event.sources?.join(' · ')}
         </p>
-        <h1 className="mt-2 font-display text-[2.4rem] leading-[1.05] tracking-[-0.02em]">
+        <h1 className="mt-2 font-display text-[2.15rem] leading-[1.1] tracking-[-0.015em]">
           {event.title}
         </h1>
-        <p className="mt-3 font-display text-[17px] italic text-quiet">
+        <p className="mt-3 text-[15px] text-quiet">
           {fullWhen(event.starts_at)}
         </p>
         {(event.venue_name || event.address) && (
@@ -92,19 +92,19 @@ export default async function EventPage({
         )}
         {hosts.length > 0 && (
           <p className="mt-1 text-[14px] text-faint">
-            Presented by <span className="italic">{hosts.join(', ')}</span>
+            Hosted by {hosts.join(', ')}
           </p>
         )}
       </header>
 
       {event.description && (
-        <div className="mt-6 whitespace-pre-wrap font-display text-[17px] leading-[1.6]">
+        <div className="mt-6 max-w-[38rem] whitespace-pre-wrap text-[15px] leading-[1.65]">
           {event.description}
         </div>
       )}
 
       <section className="mt-8 border-t border-rule pt-4">
-        <h2 className="font-mono text-[10.5px] uppercase tracking-[0.14em] text-quiet">
+        <h2 className="text-[13px] font-medium text-quiet">
           Attendance
         </h2>
 
@@ -119,10 +119,10 @@ export default async function EventPage({
             .filter(([, v]) => v !== null && v !== undefined)
             .map(([label, v]) => (
               <div key={label}>
-                <div className="tnum font-display text-[2rem] leading-none">
+                <div className="tnum text-[1.75rem] font-medium leading-none">
                   {v!.toLocaleString()}
                 </div>
-                <div className="mt-1 font-mono text-[10px] uppercase tracking-[0.12em] text-faint">
+                <div className="mt-1 text-[12px] text-faint">
                   {label}
                 </div>
               </div>
@@ -131,7 +131,7 @@ export default async function EventPage({
           {values.length > 1 && (
             <div className="ml-auto">
               <Spark values={values} />
-              <div className="mt-1 text-right font-mono text-[10px] uppercase tracking-[0.12em] text-faint">
+              <div className="mt-1 text-right text-[12px] text-faint">
                 {movement !== null && movement !== 0
                   ? `${movement > 0 ? '+' : ''}${movement} since first seen`
                   : 'no net change'}
@@ -152,7 +152,7 @@ export default async function EventPage({
                   : null;
               const delta = v !== null && prev !== null ? v - prev : null;
               return (
-                <li key={i} className="flex items-baseline gap-3 font-mono text-[11.5px]">
+                <li key={i} className="flex items-baseline gap-3 text-[13px]">
                   <span className="tnum w-36 shrink-0 text-faint">
                     {new Date(s.captured_at).toLocaleString('en-US', {
                       timeZone: 'America/Los_Angeles',
@@ -170,9 +170,8 @@ export default async function EventPage({
             })}
           </ol>
         ) : (
-          <p className="mt-3 font-display text-[15px] italic text-faint">
-            Unchanged since we first saw it. Figures are checked every three hours and
-            recorded only when they move.
+          <p className="mt-3 text-[13px] text-faint">
+            Unchanged since we first saw it.
           </p>
         )}
       </section>
@@ -184,9 +183,9 @@ export default async function EventPage({
             href={url}
             target="_blank"
             rel="noopener noreferrer"
-            className="font-mono text-[10.5px] uppercase tracking-[0.14em] text-accent hover:underline"
+            className="text-[13px] font-medium text-accent hover:underline"
           >
-            Read the original ↗
+            View original ↗
           </a>
         ))}
       </div>

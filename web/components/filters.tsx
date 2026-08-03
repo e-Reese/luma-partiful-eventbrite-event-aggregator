@@ -10,24 +10,22 @@ interface Props {
   cities: Array<{ city: string; n: number }>;
 }
 
-const SORTS: Array<{ value: string; label: string }> = [
-  { value: 'soonest', label: 'Soonest' },
-  { value: 'popular', label: 'Most anticipated' },
-  { value: 'newest', label: 'Newly listed' },
-];
-
 /**
- * Presented as a masthead rule rather than a control panel.
+ * Search and sort are always visible; everything else hides behind a native
+ * `<details>`.
  *
- * Still a plain GET form — all state lives in the URL, so results are shareable,
- * the back button works, and the page ships no client JavaScript.
+ * Eight controls competing at once made the top of the page look like a
+ * database admin panel. Most visits are "what's on" — one field. `<details>` is
+ * progressive disclosure with no client JavaScript, and it opens automatically
+ * when a hidden filter is actually in use so active state is never invisible.
  */
 export function Filters({ q, sources, city, from, to, sort, cities }: Props) {
   const allSelected = sources.length === 0 || sources.length === SOURCES.length;
+  const advancedInUse = Boolean(city || from || to || !allSelected);
 
   return (
-    <form method="get" className="border-b border-rule py-4">
-      <div className="flex items-baseline gap-3 border-b border-rule pb-3">
+    <form method="get" className="border-b border-rule pb-4 pt-5">
+      <div className="flex items-center gap-3">
         <label htmlFor="q" className="sr-only">
           Search events
         </label>
@@ -36,89 +34,86 @@ export function Filters({ q, sources, city, from, to, sort, cities }: Props) {
           type="search"
           name="q"
           defaultValue={q}
-          placeholder="Search by name, description, anything…"
-          className="w-full border-0 bg-transparent font-display text-[19px] outline-none placeholder:text-faint"
+          placeholder="Search events…"
+          className="w-full border-b border-rule bg-transparent pb-1.5 text-[16px] outline-none placeholder:text-faint focus:border-accent"
         />
+        <select
+          name="sort"
+          defaultValue={sort}
+          aria-label="Sort order"
+          className="shrink-0 cursor-pointer border-0 bg-transparent p-0 text-[13px] text-quiet outline-none hover:text-ink"
+        >
+          <option value="soonest">Soonest</option>
+          <option value="popular">Most interest</option>
+          <option value="newest">Newly listed</option>
+        </select>
         <button
           type="submit"
-          className="shrink-0 font-mono text-[10.5px] uppercase tracking-[0.14em] text-accent hover:underline"
+          className="shrink-0 text-[13px] font-medium text-accent hover:underline"
         >
           Search
         </button>
       </div>
 
-      <div className="mt-3 flex flex-wrap items-center gap-x-5 gap-y-2 font-mono text-[10.5px] uppercase tracking-[0.1em] text-quiet">
-        <fieldset className="flex items-center gap-3">
-          <legend className="sr-only">Sources</legend>
-          {SOURCES.map((s) => (
-            <label key={s} className="flex cursor-pointer items-center gap-1.5 hover:text-ink">
-              <input
-                type="checkbox"
-                name="source"
-                value={s}
-                defaultChecked={allSelected || sources.includes(s)}
-                className="h-3 w-3 accent-accent"
-              />
-              {s}
-            </label>
-          ))}
-        </fieldset>
+      <details open={advancedInUse} className="mt-2.5">
+        <summary className="inline-block text-[13px] text-faint hover:text-quiet">
+          Filters{advancedInUse ? ' ·' : ' +'}
+        </summary>
 
-        <span className="text-faint" aria-hidden>
-          |
-        </span>
-
-        <label className="flex items-center gap-1.5">
-          <span className="sr-only">City</span>
-          <select
-            name="city"
-            defaultValue={city}
-            className="cursor-pointer border-0 bg-transparent p-0 font-mono text-[10.5px] uppercase tracking-[0.1em] outline-none hover:text-ink"
-          >
-            <option value="">all cities</option>
-            {cities.map((c) => (
-              <option key={c.city} value={c.city}>
-                {c.city.toLowerCase()} ({c.n})
-              </option>
+        <div className="mt-2.5 flex flex-wrap items-center gap-x-5 gap-y-2 text-[13px] text-quiet">
+          <fieldset className="flex items-center gap-3">
+            <legend className="sr-only">Sources</legend>
+            {SOURCES.map((s) => (
+              <label key={s} className="flex cursor-pointer items-center gap-1.5 hover:text-ink">
+                <input
+                  type="checkbox"
+                  name="source"
+                  value={s}
+                  defaultChecked={allSelected || sources.includes(s)}
+                  className="h-3.5 w-3.5 accent-accent"
+                />
+                {s}
+              </label>
             ))}
-          </select>
-        </label>
+          </fieldset>
 
-        <label className="flex items-center gap-1.5">
-          from
-          <input
-            type="date"
-            name="from"
-            defaultValue={from}
-            className="tnum border-0 bg-transparent p-0 font-mono text-[10.5px] outline-none"
-          />
-        </label>
+          <label className="flex items-center gap-1.5">
+            <span className="text-faint">in</span>
+            <select
+              name="city"
+              defaultValue={city}
+              className="cursor-pointer border-0 bg-transparent p-0 text-[13px] outline-none hover:text-ink"
+            >
+              <option value="">all cities</option>
+              {cities.map((c) => (
+                <option key={c.city} value={c.city}>
+                  {c.city}
+                </option>
+              ))}
+            </select>
+          </label>
 
-        <label className="flex items-center gap-1.5">
-          to
-          <input
-            type="date"
-            name="to"
-            defaultValue={to}
-            className="tnum border-0 bg-transparent p-0 font-mono text-[10.5px] outline-none"
-          />
-        </label>
+          <label className="flex items-center gap-1.5">
+            <span className="text-faint">from</span>
+            <input
+              type="date"
+              name="from"
+              defaultValue={from}
+              className="tnum border-0 bg-transparent p-0 text-[13px] outline-none"
+            />
+          </label>
 
-        <label className="ml-auto flex items-center gap-1.5">
-          <span className="sr-only">Sort</span>
-          <select
-            name="sort"
-            defaultValue={sort}
-            className="cursor-pointer border-0 bg-transparent p-0 font-mono text-[10.5px] uppercase tracking-[0.1em] outline-none hover:text-ink"
-          >
-            {SORTS.map((s) => (
-              <option key={s.value} value={s.value}>
-                {s.label.toLowerCase()}
-              </option>
-            ))}
-          </select>
-        </label>
-      </div>
+          <label className="flex items-center gap-1.5">
+            <span className="text-faint">to</span>
+            <input
+              type="date"
+              name="to"
+              defaultValue={to}
+              className="tnum border-0 bg-transparent p-0 text-[13px] outline-none"
+            />
+          </label>
+        </div>
+      </details>
     </form>
   );
 }

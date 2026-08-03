@@ -61,37 +61,26 @@ export default async function Home({
         sort={sort ?? 'soonest'} cities={cities}
       />
 
-      <div className="flex items-baseline justify-between gap-4 py-3 font-mono text-[10.5px] uppercase tracking-[0.12em] text-quiet">
-        <p>
-          <span className="tnum text-ink">{total.toLocaleString()}</span>{' '}
-          {total === 1 ? 'event' : 'events'}
-          {q && <span className="normal-case tracking-normal"> for “{q}”</span>}
-          {filtered && (
-            <>
-              {' · '}
-              <Link href="/" className="text-accent hover:underline">
-                clear
-              </Link>
-            </>
-          )}
-        </p>
-        {stats.lastRun && (
-          <p className="text-faint">
-            updated{' '}
-            {new Date(stats.lastRun).toLocaleString('en-US', {
-              timeZone: 'America/Los_Angeles',
-              month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit',
-            })}
-          </p>
+      <p className="py-2.5 text-[13px] text-faint">
+        <span className="tnum">{total.toLocaleString()}</span>{' '}
+        {total === 1 ? 'event' : 'events'}
+        {q && <> for “{q}”</>}
+        {filtered && (
+          <>
+            {' · '}
+            <Link href="/" className="text-accent hover:underline">
+              clear
+            </Link>
+          </>
         )}
-      </div>
+      </p>
 
       {rows.length === 0 ? (
-        <p className="py-24 text-center font-display text-[20px] italic text-quiet">
-          Nothing on the calendar matches that.
+        <p className="py-24 text-center text-[15px] text-quiet">
+          Nothing matches that.
           {q && (
-            <span className="mt-2 block font-sans text-[13px] not-italic text-faint">
-              Search needs every word to appear — try fewer of them.
+            <span className="mt-1.5 block text-[13px] text-faint">
+              Every word has to appear — try fewer of them.
             </span>
           )}
         </p>
@@ -102,25 +91,18 @@ export default async function Home({
             return (
               <section key={key || 'all'}>
                 {label && (
-                  <div className="day-sticky flex items-baseline gap-2 pb-1.5 pt-4">
-                    {label.lead && (
-                      <h2 className="font-display text-[20px] leading-none tracking-[-0.01em]">
+                  <h2 className="day-sticky pb-1.5 pt-5 text-[14px] font-semibold">
+                    {label.lead ? (
+                      <>
                         {label.lead}
-                      </h2>
+                        <span className="ml-2 font-normal text-faint">{label.date}</span>
+                      </>
+                    ) : (
+                      label.date
                     )}
-                    <span
-                      className={`font-mono text-[10.5px] uppercase tracking-[0.12em] ${
-                        label.lead ? 'text-faint' : 'text-quiet'
-                      }`}
-                    >
-                      {label.date}
-                    </span>
-                    <span className="ml-auto font-mono text-[10.5px] tabular-nums text-faint">
-                      {dayRows.length}
-                    </span>
-                  </div>
+                  </h2>
                 )}
-                <ul className="border-t border-ink/70">
+                <ul className="border-t border-ink/25">
                   {dayRows.map((e) => (
                     <EventCard key={e.id} event={e} />
                   ))}
@@ -132,23 +114,23 @@ export default async function Home({
       )}
 
       {pages > 1 && (
-        <nav className="mt-10 flex items-baseline justify-between border-t border-rule pt-4 font-mono text-[10.5px] uppercase tracking-[0.12em]">
+        <nav className="mt-8 flex items-baseline justify-between border-t border-rule pt-4 text-[13px]">
           {page > 1 ? (
             <Link href={pageHref(sp, page - 1)} className="text-accent hover:underline">
-              ← earlier
+              ← Earlier
             </Link>
           ) : (
-            <span className="text-faint">← earlier</span>
+            <span className="text-faint">← Earlier</span>
           )}
           <span className="tnum text-quiet">
-            page {page} of {pages.toLocaleString()}
+            {page} / {pages.toLocaleString()}
           </span>
           {page < pages ? (
             <Link href={pageHref(sp, page + 1)} className="text-accent hover:underline">
-              later →
+              Later →
             </Link>
           ) : (
-            <span className="text-faint">later →</span>
+            <span className="text-faint">Later →</span>
           )}
         </nav>
       )}
