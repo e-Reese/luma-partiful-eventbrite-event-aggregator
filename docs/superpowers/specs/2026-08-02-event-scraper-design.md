@@ -66,38 +66,56 @@ GET https://partiful.com/_next/data/<buildId>/explore/sf.json   # 200, ~148KB JS
 
 | Pool | Count (SF) |
 |---|---|
-| `trendingSection.items` | 5 |
-| `sections[].items` (3 curated carousels) | 9 + 11 + 7 |
+| `trendingSection.items` | 8 |
+| `sections[].items` (3 curated carousels) | 26 |
 | `feedItems` | 20 |
-| **Union, deduped by id** | **~52** |
+| Raw sum | 54 |
+| **Union, deduped by `event.id`** | **41** (13 discarded as overlap) |
+
+The pools overlap heavily — roughly a quarter of the raw items are repeats. Measure the
+deduped union, never the raw sum. An earlier draft of this document reported ~52 by summing
+the pools without deduplicating, which overstated achievable coverage and would have set the
+alert floor above what the source can actually deliver.
 
 Event object fields:
 `id, title, description, locationInfo{type,hasPostCode,mapsInfo{name,addressLines}}, startDate, endDate, timezone, ownerIds[], interestedGuestCount, goingGuestCount, approvedGuestCount, maybeGuestCount, waitlistGuestCount, showGuestCount, isPublic, status, image, displaySettings`
 
 Notes:
-- `pageProps.regionEventCounts` reports **SF = 67** (also NYC 102, LA 107, CHI 38, DC 27, BOS 25, ATX 24, MIA 9, LON 1). This is our completeness oracle — see §4.
+- `pageProps.regionEventCounts` is our completeness oracle (see §4). Point-in-time readings on 2026-08-02: **SF 67 → 65 → 64** across a few hours, alongside NYC 102, LA 107, CHI 38, DC 27, BOS 25, ATX 24, MIA 9, LON 1. It drifts continuously, so treat it as a live ratio denominator, never a fixed constant.
 - `pageProps.tags` has only three categories: `DISCOVER_HOME` ("All"), `COMMUNITY`, `ARTS`. The `?tag=` query param returns byte-identical payloads, so category filtering is client-side. One request retrieves the whole city regardless.
 - **`buildId` rotates on every Partiful deploy.** Current value at time of writing: `lQ8EngFIXMTxMGIl_INAM`. It must be re-scraped, never hardcoded. This is the single most likely cause of a silent break.
 - Events are marked `isPublic: true` and the surface is labelled by Partiful as "Public events you can crash." Page robots meta is `noimageindex` only, not `noindex`.
 
-### 2.3 Eventbrite — browser required
+### 2.3 Eventbrite — browser for cookies only
 
 ```
+# Browser session, once per cycle: yields placeId (SF = 85922583) + cookie jar
 GET  https://www.eventbrite.com/d/ca--san-francisco/events/   # __SERVER_DATA__ → placeId
-                                                              # also embeds first result page
+
+# Then plain Node POSTs, replaying those cookies
 POST https://www.eventbrite.com/api/v3/destination/search/
-  Headers: X-CSRFToken: <csrftoken cookie>, X-Requested-With: XMLHttpRequest
+  Headers: X-CSRFToken: <csrftoken from cookie jar>, X-Requested-With: XMLHttpRequest,
+           Cookie: <full document.cookie>, Origin: https://www.eventbrite.com, browser UA
   Body: { browse_surface: "search",
           event_search: { places: ["<placeId>"], dates: ["current_future"],
-                          dedup: true, page: N, page_size: 20 },
+                          dedup: true, page: N, page_size: 50 },
           "expand.destination_event": [ "primary_venue", "image", "ticket_availability",
                                         "event_sales_status", "primary_organizer" ] }
 ```
 
 Notes:
-- Server-side calls are **WAF-blocked**. This source must run through a real browser session that holds the `csrftoken` cookie. The gstack `browse` daemon is that bridge.
-- Searches take internal place ids, never place names. Resolve `placeId` once from the browse page and cache it.
-- Shapes captured from live traffic on 2026-07-30 against `web_app discover v10.14.65`. This version string is a drift signal worth recording.
+- **Server-side calls are NOT WAF-blocked.** Third-party recon notes claim they are, and an earlier draft of this document repeated that. Verified false on 2026-08-02: a plain Node POST carrying the browser session's cookie jar, the `csrftoken` header and an `Origin` header returns HTTP 200 with full results. The browser is needed only to *obtain* cookies and the `placeId` — never to issue requests.
+- The in-page alternative does not work anyway: the gstack `browse` binary's `js` command returns empty output for any expression containing `fetch`, because it does not await network promises. Multi-line and async expressions are otherwise fine.
+- **`page_size` caps at 50.** Requesting 100 or 200 silently returns 50 with `pagination.page_size` echoing 50 — no error.
+- **Date-range partitioning lifts the per-query cap.** `date_range: {from, to}` works and reports honest per-window counts, so any window whose `object_count` exceeds the ~950 accessible limit is split in half and re-probed until it fits. Measured 2026-08-02: 24 adaptive windows (3-day spans in dense August, 6-month spans in sparse 2027) surfaced **12,029 unique events against 996 unpartitioned** — a 12x gain, terminating `exhausted` with zero truncated windows, in ~8 minutes over 317 requests.
+- **Partitioned mode reports `expectedCount: null`.** Neither candidate denominator is valid: the unbounded `object_count` is itself capped (it read 4382 while partitioning surfaced 12,029, which would show 274% coverage), and summing per-window counts double-counts events spanning a boundary (15,017 summed vs 12,029 unique). Completeness is proven the way Luma proves it — every window drained to its own `page_count` — with both figures kept as drift signals.
+- **The unpartitioned single-query path is retained** in `fetch.ts` for a fast shallow sweep; `partition.ts` is what the collector uses.
+- Historical note — **the endpoint exposes only ~1000 results per query.** A full SF drain returns 996 unique events over 21 pages. `object_count` is soft and varies with page size — 4413 at page_size 5 or 20, 1000 at page_size 50 — because the accessible window is capped. So SF genuinely holds ~4413 Eventbrite events but this query surfaces roughly a quarter of them. Reaching the rest requires partitioning the search (by date range or category) into windows that each fall under the cap. Deliberately not attempted in v1; recorded as the largest known coverage gap.
+- Coverage floor is 0.95, not 1.0: server-side `dedup: true` plus our own id dedup means a healthy complete drain lands at 0.996, and a 1.0 floor would mark every successful run degraded.
+- Searches take internal place ids, never place names. Resolve `placeId` once from the browse page and cache it. Verified live 2026-08-02: SF resolves to `85922583`.
+- Request shapes were captured from live traffic on 2026-07-30 against `web_app discover v10.14.65`. **The live version is already `10.14.68`** as of 2026-08-02 — recorded as a drift signal, with no coverage impact observed. This is what the drift channel is for; a version move only becomes actionable when paired with a coverage drop.
+- **The SSR page does NOT embed a first page of results.** An earlier draft of this document claimed `search_data.events` was present on the browse page, taken from third-party recon notes without verification. The live payload has 50 top-level keys and no `search_data` key at all — the event-shaped ones are `things_to_do_shelf`, `point_of_interest_shelf`, and `search_id`. Results come from the POST search API only; there is no free first page and no SSR fallback.
+- Parsing `window.__SERVER_DATA__` requires brace-counting to the matching close, not a regex anchored on `</script>`. The live page assigns several globals in one script block, so a lazy match runs past the object boundary. A regex version passed against a single-assignment fixture and returned null on every real page.
 
 ### 2.4 What was rejected
 
@@ -147,9 +165,9 @@ This is the mechanism that makes "as close to all events as possible" measurable
 
 | Source | Oracle | Check | Observed 2026-08-02 |
 |---|---|---|---|
-| Partiful | `regionEventCounts.SF` | `fetched / reported` ≥ floor | 52 / 67 = 0.78 |
+| Partiful | `regionEventCounts.SF` | `fetched / reported` ≥ floor | 41 / 65 = 0.63 |
 | Luma | `has_more` / `next_cursor` | terminated because `has_more === false`, not from an error, a stuck cursor, or a page cap | 779 over 17 pages, clean |
-| Eventbrite | result total in search response | `sum(pages) === total` | not yet measured |
+| Eventbrite | `pagination.object_count` (soft) | `fetched / reported` >= 0.95 | 996 / 1000 = 0.996 over 21 pages |
 
 The Luma cursor trap in §2.1 is the canonical example of what this section exists to catch. Both the broken and the correct implementation return HTTP 200 with well-formed JSON and plausible-looking events. Nothing short of comparing against an exhaustion proof distinguishes 45 from 779. A monitoring approach based on "did the job error?" reports success in both cases.
 
@@ -172,7 +190,15 @@ pagination_terminated_cleanly, error, drift_signals jsonb
 ```
 
 Rules:
-- `coverage_pct` below a per-source floor → the run is marked degraded and the claw is notified. Floor starts at 0.75 for Partiful (current observed ~52/67 ≈ 0.78) and 1.0 for the two sources that can prove exhaustion.
+- `coverage_pct` below a per-source floor → the run is marked degraded and the claw is notified. Floor is **0.50 for Partiful** and 1.0 for the two sources that can prove exhaustion.
+
+  The Partiful floor deserves its reasoning recorded, because getting it wrong makes the
+  oracle useless in either direction. Observed coverage is 0.63, and that is the *ceiling*,
+  not a shortfall to fix — a single page load simply cannot see all 65 events. A floor set
+  at or above 0.63 marks every healthy run degraded, and an oracle that fires every cycle
+  trains you to ignore it. A floor much below 0.50 misses the failure that actually matters:
+  losing a pool. Dropping `feedItems` takes coverage to roughly 0.43 and dropping
+  `sections[]` to roughly 0.38, so 0.50 catches either while tolerating normal feed rotation.
 - A cursor loop that exits for any reason other than `has_more === false` is a failure, never a success with fewer rows.
 - **Zero results is always an error, never an empty city.** This single rule catches most silent breaks.
 
@@ -212,7 +238,9 @@ Two deliberate choices:
 
 **`raw jsonb` is always retained.** Reprocessing history beats re-crawling it, and when a source changes shape the raw column is the only way to backfill the new field onto old rows.
 
-**`snapshots` is append-only.** Partiful exposes five guest counters and Luma exposes `guest_count` / `ticket_info` / `registration_availability`. Sampling them each cycle turns a list of events into a time series of event momentum: what fills up, how fast, which hosts reliably sell out. No API sells this — it exists only if you were recording. For a dataset whose purpose is trends, this is the asset that cannot be recovered later.
+**`snapshots` is append-only, and written only on change.** Partiful exposes five guest counters and Luma exposes `guest_count` / `ticket_info` / `registration_availability`. Sampling them each cycle turns a list of events into a time series of event momentum: what fills up, how fast, which hosts reliably sell out. No API sells this — it exists only if you were recording. For a dataset whose purpose is trends, this is the asset that cannot be recovered later.
+
+Rows are never updated or deleted, but an unchanged sample is not written at all. Guest counts are a step function, so the value at any timestamp is still the most recent row at or before it — nothing is lost. Measured 2026-08-02 at 13,277 events per cycle: **408 rows written instead of 13,277, a 97% reduction** (Eventbrite 388/11,997, Luma 13/777, Partiful 7/41). Unfiltered this would have been ~103k rows/day and ~37M/year, exhausting a Supabase free tier within weeks; filtered it is ~3.3k/day. The batch and single-row paths must agree on this rule, or a batch falling back per-row would silently reintroduce duplicates.
 
 ---
 
@@ -229,6 +257,13 @@ Two distinct problems, handled differently.
 3. Anything that matches on time and geo but not title, or vice versa → **ambiguous**, queued for the claw.
 
 Only tier 3 reaches a model. It is expected to be a small fraction, and every LLM decision is written back with its reasoning so it can be audited and reversed. A wrong merge is worse than a missed merge, so the agent's instruction is to default to "not the same event" under uncertainty.
+
+**Measured 2026-08-02: cross-posting is rare to the point of absence.** Across a full live corpus of 1,821 events (783 Luma + 42 Partiful + 996 Eventbrite), **zero** cross-source pairs overlapped in time with even 0.30 title similarity. The three platforms serve largely disjoint communities — Luma skews tech and professional, Partiful social and invite-driven, Eventbrite ticketed and commercial. Two consequences:
+
+- The tier thresholds are currently unexercised by production data. They are set conservatively rather than empirically, and the 0.85 title cut in particular has never fired on a real pair.
+- Cross-source merging is **not** on the critical path for this dataset, and the deferred merge-writer (§ follow-on work) is lower priority than it appeared at design time. Re-measure before investing in it.
+
+One property of the metric is worth recording because it looks like a bug and is not: trigram Jaccard is length-sensitive. Appending ` 2026` scores 0.808 against a 20-character title but 0.891 against a 40-character one, so short titles must match near-exactly to merge while longer ones tolerate suffixes.
 
 ---
 
@@ -266,7 +301,7 @@ Fixtures are frozen sample responses committed to the repo. `vitest` asserts tha
 
 | Gap | Impact | Mitigation |
 |---|---|---|
-| Partiful ~52/67 on a single load | ~22% of SF events unseen per cycle | The feed rotates; accumulating across 3-hourly cycles should close most of it. Measure via `coverage_pct` before building anything more elaborate |
+| Partiful 41/65 on a single load | ~37% of SF events unseen per cycle | The feed rotates; accumulating across 3-hourly cycles should close most of it. Measure via `coverage_pct` before building anything more elaborate |
 | Luma is radius-based, not city-bounded | 779 SF-query events span the whole Bay Area (500 actually in SF) | Retain `geo_address_info.city` per event; treat the city boundary as a query-time filter, never a collection-time one |
 | Source volumes are wildly unequal | Luma 779 vs Partiful 67 — naive "events per city" analysis would read as a Luma-dominated world | Always segment trend queries by source; never aggregate raw counts across platforms without normalising |
 | Luma descriptions absent from discovery | Weaker text for tagging/search | Accepted for v1. Per-event fetch is 429-prone; if needed later, do it slowly for a subset |
@@ -274,7 +309,37 @@ Fixtures are frozen sample responses committed to the repo. `vitest` asserts tha
 | `buildId` rotation | Partiful breaks on every deploy | Never hardcoded; re-scrape and retry is routine |
 | Cross-posted events inflate counts | Trend analysis skewed | Handled by §6; `event_sources` preserves the fact that an event appeared on two platforms, which is itself a signal |
 
-Explicit uncertainty: the 52/67 gap has not been observed over time, only on one fetch. Whether accumulation closes it is the first empirical question the pipeline should answer, and it should be answered with data before any host-graph crawling or search-engine backfill is built.
+**Answered 2026-08-02.** Two cycles roughly an hour apart fetched 42 and then 41 Partiful
+events and accumulated **47 distinct** — so the feed does rotate and accumulation does close
+the gap. Single-cycle coverage 0.63 became 0.72 accumulated after two runs. Eventbrite behaved
+the same way: 996 + 996 fetched, 1014 accumulated. Host-graph snowballing and search-engine
+backfill are therefore **not** needed to reach usable Partiful coverage; time does the work.
+Re-measure after a week before considering either.
+
+Original framing, kept for the record: the 41/65 gap had been observed on single fetches only, never over time. Whether 3-hourly accumulation closes it is the first empirical question the pipeline should answer, and it should be answered with data before any host-graph crawling or search-engine backfill is built.
+
+The measurement history is itself a caution. The first pass at this number summed the four pools and reported 52; deduplicating gives 41. Every coverage figure in this document is a deduped unique count, and any future number quoted here should state which it is.
+
+---
+
+## 9a. Write performance
+
+The first live cycle wrote 1821 events in **14m07s at 1% CPU** — roughly 12,700 sequential
+round trips against the Supabase session pooler, essentially all latency. Batched writes
+(`src/db/batch.ts`, 500 rows per batch) brought a full cycle to **47s**, of which ~45s is
+network collection; the write phase is about two seconds.
+
+The batch path deliberately keeps a per-row fallback. A failing batch is retried row by row
+through the original single-row writer, so one malformed row drops only itself instead of
+taking up to 499 good events with it. Fallback counts and outright failures land in the run
+report's `driftSignals`, and any failure degrades the run — persistence problems are visible,
+not silent.
+
+Two Postgres details worth remembering:
+- Event UUIDs are generated client-side. `insert ... returning` cannot map generated ids back
+  to input rows, and client-side ids remove the need to read anything back.
+- Hosts are deduplicated per batch. `on conflict do update` cannot touch the same row twice in
+  one statement, which one organiser hosting several events in a batch would otherwise trigger.
 
 ---
 

@@ -1,0 +1,61 @@
+@import 'tailwindcss';
+
+/*
+ * A small token set rather than Tailwind's full palette. The page is dense data,
+ * so it needs a narrow, quiet range: one surface, one border, two text weights,
+ * and a single accent. Both themes are defined because the viewer's OS decides.
+ */
+@theme {
+  --color-bg: oklch(99% 0.003 250);
+  --color-surface: oklch(100% 0 0);
+  --color-line: oklch(92% 0.005 250);
+  --color-ink: oklch(24% 0.02 250);
+  --color-muted: oklch(56% 0.015 250);
+  --color-accent: oklch(56% 0.19 265);
+
+  --color-luma: oklch(60% 0.16 30);
+  --color-partiful: oklch(62% 0.17 330);
+  --color-eventbrite: oklch(58% 0.15 250);
+
+  --font-sans: ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, monospace;
+}
+
+@media (prefers-color-scheme: dark) {
+  @theme {
+    --color-bg: oklch(17% 0.012 255);
+    --color-surface: oklch(21% 0.014 255);
+    --color-line: oklch(28% 0.016 255);
+    --color-ink: oklch(94% 0.006 255);
+    --color-muted: oklch(66% 0.018 255);
+    --color-accent: oklch(72% 0.15 265);
+
+    --color-luma: oklch(70% 0.15 30);
+    --color-partiful: oklch(72% 0.16 330);
+    --color-eventbrite: oklch(70% 0.13 250);
+  }
+}
+
+html {
+  background: var(--color-bg);
+  color: var(--color-ink);
+  color-scheme: light dark;
+}
+
+body {
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Inputs inherit the theme rather than the browser default, which otherwise
+   renders white-on-white in dark mode. */
+input,
+select {
+  background: var(--color-surface);
+  color: var(--color-ink);
+  border-color: var(--color-line);
+}
+
+::selection {
+  background: color-mix(in oklch, var(--color-accent) 30%, transparent);
+}

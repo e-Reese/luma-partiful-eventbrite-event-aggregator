@@ -1,0 +1,31 @@
+{
+  "name": "event_scraper",
+  "version": "0.1.0",
+  "description": "Public event dataset for SF: Luma, Partiful, Eventbrite",
+  "main": "index.js",
+  "directories": {
+    "doc": "docs"
+  },
+  "scripts": {
+    "test": "vitest run --exclude 'test/contract/**'",
+    "test:contract": "vitest run test/contract",
+    "cycle": "tsx bin/run-cycle.ts",
+    "migrate": "tsx scripts/migrate.ts"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "module",
+  "private": true,
+  "dependencies": {
+    "dotenv": "^17.4.2",
+    "pg": "^8.22.0"
+  },
+  "devDependencies": {
+    "@types/node": "^26.1.2",
+    "@types/pg": "^8.20.3",
+    "tsx": "^4.23.4",
+    "typescript": "^7.0.2",
+    "vitest": "^4.1.10"
+  }
+}
