@@ -11,8 +11,15 @@ export interface Collector {
 export interface CycleDeps {
   db: { query(sql: string, params?: unknown[]): Promise<{ rows: any[] }> };
   collectors: Collector[];
-  upsertEvent(db: CycleDeps['db'], event: CanonicalEvent): Promise<string>;
-  insertSnapshot(db: CycleDeps['db'], eventId: string, event: CanonicalEvent): Promise<void>;
+  /**
+   * Writes a source's events. Batched internally with a per-row fallback, so a
+   * single malformed row still cannot abort the cycle. Returns counts rather
+   * than throwing — a persistence problem shows up as a `persisted` shortfall
+   * against `fetchedCount` in the run report, not as a lost cycle.
+   */
+  persistEvents(
+    db: CycleDeps['db'], events: CanonicalEvent[],
+  ): Promise<{ persisted: number; failed: number; batchFallbacks: number }>;
   insertRun(db: CycleDeps['db'], report: RunReport): Promise<void>;
   medianRecentCount(
     db: CycleDeps['db'], source: SourceName, days: number,
@@ -45,15 +52,7 @@ export async function runCycle(deps: CycleDeps): Promise<RunReport[]> {
 
     const events = dedupeWithinSource(collector.normalize(result.records));
 
-    for (const event of events) {
-      try {
-        const eventId = await deps.upsertEvent(deps.db, event);
-        await deps.insertSnapshot(deps.db, eventId, event);
-      } catch {
-        // A single bad row must not abort the cycle; coverage reporting will
-        // surface a systemic problem via fetched vs persisted divergence.
-      }
-    }
+    const write = await deps.persistEvents(deps.db, events);
 
     const trailingMedian = await deps.medianRecentCount(deps.db, collector.source, 7);
     const report = evaluateRun(result, {
@@ -61,6 +60,17 @@ export async function runCycle(deps: CycleDeps): Promise<RunReport[]> {
       finishedAt: new Date().toISOString(),
       trailingMedian,
     });
+
+    // Persistence problems are recorded, never swallowed: a batch that fell back
+    // row-by-row, or rows that failed outright, are visible in the run report.
+    if (write.failed > 0 || write.batchFallbacks > 0) {
+      report.driftSignals = {
+        ...report.driftSignals,
+        persistFailed: write.failed,
+        persistBatchFallbacks: write.batchFallbacks,
+      };
+      if (write.failed > 0) report.status = 'degraded';
+    }
 
     await deps.insertRun(deps.db, report);
     reports.push(report);

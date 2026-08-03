@@ -86,7 +86,9 @@ create table if not exists runs (
   status           text not null check (status in ('ok', 'degraded', 'failed')),
   fetched_count    int not null,
   expected_count   int,
-  coverage_pct     numeric(5,4),
+  coverage_pct     numeric,        -- unbounded: a source under-reporting
+                                   -- expected_count must not throw on insert
+                                   -- and lose the run report entirely
   termination_kind text not null,
   error            text,
   drift_signals    jsonb not null default '{}'::jsonb

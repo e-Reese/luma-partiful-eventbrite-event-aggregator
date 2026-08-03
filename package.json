@@ -10,7 +10,7 @@
     "test": "vitest run --exclude 'test/contract/**'",
     "test:contract": "vitest run test/contract",
     "cycle": "tsx bin/run-cycle.ts",
-    "migrate": "psql $DATABASE_URL -f migrations/001_initial.sql"
+    "migrate": "tsx scripts/migrate.ts"
   },
   "keywords": [],
   "author": "",

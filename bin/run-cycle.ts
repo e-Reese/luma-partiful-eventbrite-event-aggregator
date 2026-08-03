@@ -3,6 +3,7 @@ import { getPool, closePool } from '../src/db/client.js';
 import { insertRun, medianRecentCount } from '../src/db/runs.js';
 import { upsertEvent } from '../src/db/events.js';
 import { insertSnapshot } from '../src/db/snapshots.js';
+import { persistEvents } from '../src/db/batch.js';
 import { runCycle, type Collector } from '../src/cycle.js';
 import { httpGetJson, httpGetText } from '../src/http.js';
 import { fetchLuma, normalizeLuma } from '../src/sources/luma/index.js';
@@ -34,8 +35,11 @@ const collectors: Collector[] = [
 const reports = await runCycle({
   db: getPool(),
   collectors,
-  upsertEvent,
-  insertSnapshot,
+  persistEvents: (db, events) =>
+    persistEvents(db, events, async (d, event) => {
+      const id = await upsertEvent(d, event);
+      await insertSnapshot(d, id, event);
+    }),
   insertRun,
   medianRecentCount,
 });

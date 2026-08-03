@@ -23,16 +23,15 @@ describe('runCycle', () => {
       collectors: [
         { source: 'luma' as const, fetch: async () => good, normalize: () => [event('a')] },
       ],
-      upsertEvent: vi.fn().mockResolvedValue('uuid-1'),
-      insertSnapshot: vi.fn().mockResolvedValue(undefined),
+      persistEvents: vi.fn().mockResolvedValue({ persisted: 1, failed: 0, batchFallbacks: 0 }),
       insertRun: vi.fn().mockResolvedValue(undefined),
       medianRecentCount: vi.fn().mockResolvedValue(null),
     };
 
     const reports = await runCycle(deps as any);
 
-    expect(deps.upsertEvent).toHaveBeenCalledTimes(1);
-    expect(deps.insertSnapshot).toHaveBeenCalledTimes(1);
+    expect(deps.persistEvents).toHaveBeenCalledTimes(1);
+    expect(deps.persistEvents.mock.calls[0]![1]).toHaveLength(1);
     expect(deps.insertRun).toHaveBeenCalledTimes(1);
     expect(reports[0]!.status).toBe('ok');
   });
@@ -48,8 +47,7 @@ describe('runCycle', () => {
         },
         { source: 'partiful' as const, fetch: async () => good, normalize: () => [event('a')] },
       ],
-      upsertEvent: vi.fn().mockResolvedValue('uuid-1'),
-      insertSnapshot: vi.fn().mockResolvedValue(undefined),
+      persistEvents: vi.fn().mockResolvedValue({ persisted: 1, failed: 0, batchFallbacks: 0 }),
       insertRun: vi.fn().mockResolvedValue(undefined),
       medianRecentCount: vi.fn().mockResolvedValue(null),
     };
@@ -60,5 +58,40 @@ describe('runCycle', () => {
     expect(reports[0]!.status).toBe('failed');
     expect(reports[0]!.error).toBe('luma down');
     expect(reports[1]!.status).toBe('ok');
+  });
+});
+
+describe('runCycle persistence reporting', () => {
+  function deps(persist: any) {
+    return {
+      db: { query: vi.fn().mockResolvedValue({ rows: [] }) } as any,
+      collectors: [
+        { source: 'luma' as const, fetch: async () => good, normalize: () => [event('a')] },
+      ],
+      persistEvents: vi.fn().mockResolvedValue(persist),
+      insertRun: vi.fn().mockResolvedValue(undefined),
+      medianRecentCount: vi.fn().mockResolvedValue(null),
+    };
+  }
+
+  it('degrades the run when rows failed to persist', async () => {
+    const d = deps({ persisted: 0, failed: 1, batchFallbacks: 1 });
+    const [report] = await runCycle(d as any);
+    expect(report!.status).toBe('degraded');
+    expect(report!.driftSignals.persistFailed).toBe(1);
+  });
+
+  it('records a batch fallback without degrading when every row still landed', async () => {
+    const d = deps({ persisted: 1, failed: 0, batchFallbacks: 1 });
+    const [report] = await runCycle(d as any);
+    expect(report!.status).toBe('ok');
+    expect(report!.driftSignals.persistBatchFallbacks).toBe(1);
+  });
+
+  it('leaves driftSignals untouched on a clean write', async () => {
+    const d = deps({ persisted: 1, failed: 0, batchFallbacks: 0 });
+    const [report] = await runCycle(d as any);
+    expect(report!.status).toBe('ok');
+    expect(report!.driftSignals.persistFailed).toBeUndefined();
   });
 });
