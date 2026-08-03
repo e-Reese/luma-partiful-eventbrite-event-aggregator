@@ -1,4 +1,5 @@
 import { type CanonicalEvent, EMPTY_COUNTS, type RawRecord } from '../../types.js';
+import { zonedToUtcIso } from './time.js';
 
 interface EventbriteResult {
   id?: string;
@@ -23,18 +24,12 @@ interface EventbriteResult {
   } | null;
 }
 
-function toIso(date?: string | null, time?: string | null): string | null {
-  if (!date) return null;
-  const parsed = new Date(`${date}T${time ?? '00:00'}:00.000Z`);
-  return Number.isNaN(parsed.getTime()) ? null : parsed.toISOString();
-}
-
 export function normalizeEventbrite(records: RawRecord[]): CanonicalEvent[] {
   const out: CanonicalEvent[] = [];
 
   for (const record of records) {
     const r = record.payload as EventbriteResult;
-    const startsAt = toIso(r?.start_date, r?.start_time);
+    const startsAt = zonedToUtcIso(r?.start_date, r?.start_time, r?.timezone);
     if (!r?.name || !startsAt) continue;
 
     const address = r.primary_venue?.address ?? null;
@@ -47,7 +42,7 @@ export function normalizeEventbrite(records: RawRecord[]): CanonicalEvent[] {
       title: r.name,
       description: r.summary ?? null,
       startsAt,
-      endsAt: toIso(r.end_date, r.end_time),
+      endsAt: zonedToUtcIso(r.end_date, r.end_time, r.timezone),
       timezone: r.timezone ?? null,
       venueName: r.primary_venue?.name ?? null,
       address: address?.localized_address_display ?? null,
