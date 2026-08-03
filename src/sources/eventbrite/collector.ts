@@ -2,7 +2,7 @@ import {
   browseGoto, browseHtml, cookiePostJson, csrfFromCookies,
   extractAppVersion, extractPlaceId, readCookieHeader,
 } from './browse.js';
-import { fetchEventbrite } from './fetch.js';
+import { fetchEventbritePartitioned } from './partition.js';
 import type { FetchResult } from '../../types.js';
 
 const BROWSE_URL = 'https://www.eventbrite.com/d/ca--san-francisco/events/';
@@ -64,7 +64,7 @@ export async function collectEventbrite(): Promise<FetchResult> {
     };
   }
 
-  const result = await fetchEventbrite({
+  const result = await fetchEventbritePartitioned({
     placeId,
     csrfToken,
     post: cookiePostJson(cookies),
