@@ -29,7 +29,7 @@ describe('persistEvents', () => {
 
     const outcome = await persistEvents(db as any, events);
 
-    expect(outcome).toEqual({ persisted: 50, failed: 0, batchFallbacks: 0 });
+    expect(outcome).toEqual({ persisted: 50, failed: 0, batchFallbacks: 0, snapshotsWritten: 0 });
     // lookup + insert events + upsert sources + hosts + snapshots = 5.
     // The point of the batch path is that this does not scale with row count.
     expect(db.query.mock.calls.length).toBeLessThanOrEqual(6);
@@ -38,7 +38,7 @@ describe('persistEvents', () => {
   it('returns an empty outcome for no events without touching the db', async () => {
     const db = okDb();
     expect(await persistEvents(db as any, [])).toEqual({
-      persisted: 0, failed: 0, batchFallbacks: 0,
+      persisted: 0, failed: 0, batchFallbacks: 0, snapshotsWritten: 0,
     });
     expect(db.query).not.toHaveBeenCalled();
   });
@@ -104,7 +104,7 @@ describe('persistEvents', () => {
 
     const outcome = await persistEvents(db as any, [ev('a'), ev('b')]);
 
-    expect(outcome).toEqual({ persisted: 0, failed: 2, batchFallbacks: 1 });
+    expect(outcome).toEqual({ persisted: 0, failed: 2, batchFallbacks: 1, snapshotsWritten: 0 });
   });
 
   it('deduplicates hosts so one organiser across several events is upserted once', async () => {
@@ -124,5 +124,39 @@ describe('persistEvents', () => {
     expect(params[1]).toEqual(['org-1']);
     // ...while the link arrays still carry all three event/host pairs.
     expect((params[5] as string[]).length).toBe(3);
+  });
+});
+
+describe('change-only snapshots', () => {
+  it('reports how many snapshot rows the database actually accepted', async () => {
+    // The insert filters unchanged rows server-side, so `returning id` yields
+    // fewer rows than events submitted.
+    const db = {
+      query: vi.fn().mockImplementation(async (sql: string) => {
+        if (sql.includes('from event_sources')) return { rows: [] };
+        if (sql.includes('insert into snapshots')) return { rows: [{ id: 1 }, { id: 2 }] };
+        return { rows: [] };
+      }),
+    };
+
+    const outcome = await persistEvents(
+      db as any,
+      Array.from({ length: 10 }, (_, i) => ev(`e${i}`)),
+    );
+
+    expect(outcome.persisted).toBe(10);
+    expect(outcome.snapshotsWritten).toBe(2);
+  });
+
+  it('compares against the latest prior sample, not the whole history', async () => {
+    const db = okDb();
+    await persistEvents(db as any, [ev('a')]);
+
+    const snap = db.query.mock.calls.find((c) =>
+      (c[0] as string).includes('insert into snapshots'))![0] as string;
+    expect(snap).toContain('distinct on (s.event_id)');
+    expect(snap).toContain('order by s.event_id, s.captured_at desc');
+    // NULL-safe comparison: null -> null is not a change, null -> 0 is.
+    expect(snap).toContain('is distinct from');
   });
 });

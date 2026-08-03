@@ -238,7 +238,9 @@ Two deliberate choices:
 
 **`raw jsonb` is always retained.** Reprocessing history beats re-crawling it, and when a source changes shape the raw column is the only way to backfill the new field onto old rows.
 
-**`snapshots` is append-only.** Partiful exposes five guest counters and Luma exposes `guest_count` / `ticket_info` / `registration_availability`. Sampling them each cycle turns a list of events into a time series of event momentum: what fills up, how fast, which hosts reliably sell out. No API sells this — it exists only if you were recording. For a dataset whose purpose is trends, this is the asset that cannot be recovered later.
+**`snapshots` is append-only, and written only on change.** Partiful exposes five guest counters and Luma exposes `guest_count` / `ticket_info` / `registration_availability`. Sampling them each cycle turns a list of events into a time series of event momentum: what fills up, how fast, which hosts reliably sell out. No API sells this — it exists only if you were recording. For a dataset whose purpose is trends, this is the asset that cannot be recovered later.
+
+Rows are never updated or deleted, but an unchanged sample is not written at all. Guest counts are a step function, so the value at any timestamp is still the most recent row at or before it — nothing is lost. Measured 2026-08-02 at 13,277 events per cycle: **408 rows written instead of 13,277, a 97% reduction** (Eventbrite 388/11,997, Luma 13/777, Partiful 7/41). Unfiltered this would have been ~103k rows/day and ~37M/year, exhausting a Supabase free tier within weeks; filtered it is ~3.3k/day. The batch and single-row paths must agree on this rule, or a batch falling back per-row would silently reintroduce duplicates.
 
 ---
 

@@ -151,25 +151,66 @@ async function linkHostsBatch(
   );
 }
 
+/**
+ * Appends a snapshot only when an event's counts actually changed.
+ *
+ * Guest counts are a step function, so writing an identical row every cycle
+ * stores no information. At 12,888 events on a 3-hourly schedule the naive
+ * version produces ~103k rows/day (~37M/year), which exhausts a Supabase free
+ * tier in weeks; most of those rows are duplicates of the row before them.
+ *
+ * Skipping unchanged rows loses nothing — the value at any timestamp is still
+ * the most recent row at or before it — while collapsing the great majority of
+ * writes. The first sample for an event is always written (`l.event_id is
+ * null`), so every event has a baseline.
+ *
+ * `is distinct from` over row constructors does the comparison NULL-safely: a
+ * count going null→null must not count as a change, and null→0 must.
+ *
+ * Returns the number of rows actually written.
+ */
 async function insertSnapshotsBatch(
   db: Queryable,
   events: CanonicalEvent[],
   ids: Map<string, string>,
   source: string,
-): Promise<void> {
+): Promise<number> {
   const rows = events.filter((e) => ids.has(e.sourceEventId));
-  if (rows.length === 0) return;
-  await db.query(
-    `insert into snapshots
+  if (rows.length === 0) return 0;
+
+  const result = await db.query(
+    `with input as (
+       select * from unnest($2::uuid[], $3::int[], $4::int[], $5::int[], $6::int[],
+                            $7::int[], $8::int[], $9::int[], $10::text[], $11::text[])
+              as u(event_id, interested, going, approved, maybe, waitlist,
+                   guests, tickets, avail, sales)
+     ),
+     latest as (
+       select distinct on (s.event_id)
+              s.event_id, s.interested_count, s.going_count, s.approved_count,
+              s.maybe_count, s.waitlist_count, s.guest_count, s.ticket_count,
+              s.registration_availability, s.sales_status
+         from snapshots s
+         join input i on i.event_id = s.event_id
+        where s.source = $1::source_name
+        order by s.event_id, s.captured_at desc
+     )
+     insert into snapshots
        (event_id, source, interested_count, going_count, approved_count,
         maybe_count, waitlist_count, guest_count, ticket_count,
         registration_availability, sales_status)
-     select u.event_id, $1::source_name, u.interested, u.going, u.approved,
-            u.maybe, u.waitlist, u.guests, u.tickets, u.avail, u.sales
-       from unnest($2::uuid[], $3::int[], $4::int[], $5::int[], $6::int[], $7::int[],
-                   $8::int[], $9::int[], $10::text[], $11::text[])
-            as u(event_id, interested, going, approved, maybe, waitlist,
-                 guests, tickets, avail, sales)`,
+     select i.event_id, $1::source_name, i.interested, i.going, i.approved,
+            i.maybe, i.waitlist, i.guests, i.tickets, i.avail, i.sales
+       from input i
+       left join latest l on l.event_id = i.event_id
+      where l.event_id is null
+         or (l.interested_count, l.going_count, l.approved_count, l.maybe_count,
+             l.waitlist_count, l.guest_count, l.ticket_count,
+             l.registration_availability, l.sales_status)
+            is distinct from
+            (i.interested, i.going, i.approved, i.maybe, i.waitlist,
+             i.guests, i.tickets, i.avail, i.sales)
+     returning id`,
     [
       source,
       rows.map((e) => ids.get(e.sourceEventId)),
@@ -184,10 +225,15 @@ async function insertSnapshotsBatch(
       rows.map((e) => e.counts.salesStatus),
     ],
   );
+
+  return result.rows.length;
 }
 
 /** Writes one batch. Throws on any failure so the caller can fall back per row. */
-async function writeBatch(db: Queryable, events: CanonicalEvent[]): Promise<number> {
+async function writeBatch(
+  db: Queryable,
+  events: CanonicalEvent[],
+): Promise<{ persisted: number; snapshots: number }> {
   const source = events[0]!.source;
   const known = await existingIds(db, source, events.map((e) => e.sourceEventId));
 
@@ -203,15 +249,17 @@ async function writeBatch(db: Queryable, events: CanonicalEvent[]): Promise<numb
   }
   await upsertEventSources(db, events, ids, source);
   await linkHostsBatch(db, events, ids, source);
-  await insertSnapshotsBatch(db, events, ids, source);
+  const snapshots = await insertSnapshotsBatch(db, events, ids, source);
 
-  return events.length;
+  return { persisted: events.length, snapshots };
 }
 
 export interface PersistOutcome {
   persisted: number;
   failed: number;
   batchFallbacks: number;
+  /** Snapshot rows actually written — far below `persisted` once counts settle. */
+  snapshotsWritten: number;
 }
 
 /**
@@ -228,12 +276,16 @@ export async function persistEvents(
   events: CanonicalEvent[],
   singleRowWriter?: (db: Queryable, event: CanonicalEvent) => Promise<void>,
 ): Promise<PersistOutcome> {
-  const outcome: PersistOutcome = { persisted: 0, failed: 0, batchFallbacks: 0 };
+  const outcome: PersistOutcome = {
+    persisted: 0, failed: 0, batchFallbacks: 0, snapshotsWritten: 0,
+  };
   if (events.length === 0) return outcome;
 
   for (const group of chunk(events, BATCH_SIZE)) {
     try {
-      outcome.persisted += await writeBatch(db, group);
+      const written = await writeBatch(db, group);
+      outcome.persisted += written.persisted;
+      outcome.snapshotsWritten += written.snapshots;
     } catch {
       outcome.batchFallbacks += 1;
       if (!singleRowWriter) {

@@ -23,7 +23,7 @@ describe('runCycle', () => {
       collectors: [
         { source: 'luma' as const, fetch: async () => good, normalize: () => [event('a')] },
       ],
-      persistEvents: vi.fn().mockResolvedValue({ persisted: 1, failed: 0, batchFallbacks: 0 }),
+      persistEvents: vi.fn().mockResolvedValue({ persisted: 1, failed: 0, batchFallbacks: 0, snapshotsWritten: 1 }),
       insertRun: vi.fn().mockResolvedValue(undefined),
       medianRecentCount: vi.fn().mockResolvedValue(null),
     };
@@ -47,7 +47,7 @@ describe('runCycle', () => {
         },
         { source: 'partiful' as const, fetch: async () => good, normalize: () => [event('a')] },
       ],
-      persistEvents: vi.fn().mockResolvedValue({ persisted: 1, failed: 0, batchFallbacks: 0 }),
+      persistEvents: vi.fn().mockResolvedValue({ persisted: 1, failed: 0, batchFallbacks: 0, snapshotsWritten: 1 }),
       insertRun: vi.fn().mockResolvedValue(undefined),
       medianRecentCount: vi.fn().mockResolvedValue(null),
     };
@@ -68,7 +68,7 @@ describe('runCycle persistence reporting', () => {
       collectors: [
         { source: 'luma' as const, fetch: async () => good, normalize: () => [event('a')] },
       ],
-      persistEvents: vi.fn().mockResolvedValue(persist),
+      persistEvents: vi.fn().mockResolvedValue({ snapshotsWritten: 0, ...persist }),
       insertRun: vi.fn().mockResolvedValue(undefined),
       medianRecentCount: vi.fn().mockResolvedValue(null),
     };

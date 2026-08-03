@@ -19,7 +19,9 @@ export interface CycleDeps {
    */
   persistEvents(
     db: CycleDeps['db'], events: CanonicalEvent[],
-  ): Promise<{ persisted: number; failed: number; batchFallbacks: number }>;
+  ): Promise<{
+    persisted: number; failed: number; batchFallbacks: number; snapshotsWritten: number;
+  }>;
   insertRun(db: CycleDeps['db'], report: RunReport): Promise<void>;
   medianRecentCount(
     db: CycleDeps['db'], source: SourceName, days: number,
@@ -63,6 +65,10 @@ export async function runCycle(deps: CycleDeps): Promise<RunReport[]> {
 
     // Persistence problems are recorded, never swallowed: a batch that fell back
     // row-by-row, or rows that failed outright, are visible in the run report.
+    report.driftSignals = {
+      ...report.driftSignals,
+      snapshotsWritten: write.snapshotsWritten,
+    };
     if (write.failed > 0 || write.batchFallbacks > 0) {
       report.driftSignals = {
         ...report.driftSignals,
