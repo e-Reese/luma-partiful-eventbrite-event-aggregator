@@ -1,43 +1,57 @@
 import type { Metadata } from 'next';
+import { Instrument_Serif, Inter } from 'next/font/google';
 import Link from 'next/link';
 import './globals.css';
 
+const display = Instrument_Serif({
+  weight: '400',
+  subsets: ['latin'],
+  style: ['normal', 'italic'],
+  variable: '--font-serif-display',
+  display: 'swap',
+});
+
+const body = Inter({
+  subsets: ['latin'],
+  variable: '--font-body',
+  display: 'swap',
+});
+
 export const metadata: Metadata = {
-  title: 'SF Events — aggregated from Luma, Partiful & Eventbrite',
+  title: 'The San Francisco Register — everything happening, in one place',
   description:
-    'Search public San Francisco events collected from Luma, Partiful and Eventbrite, refreshed every three hours.',
+    'Every public event in San Francisco from Luma, Partiful and Eventbrite, collected every three hours.',
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en">
-      <body className="min-h-screen bg-bg text-ink">
-        <header className="border-b border-line">
-          <div className="mx-auto flex max-w-5xl items-baseline justify-between gap-4 px-5 py-4">
-            <Link href="/" className="text-[15px] font-semibold tracking-tight">
-              SF Events
-              <span className="ml-2 font-mono text-[11px] font-normal text-muted">
-                luma · partiful · eventbrite
-              </span>
+    <html lang="en" className={`${display.variable} ${body.variable}`}>
+      <body className="min-h-screen bg-paper text-ink">
+        <div className="mx-auto max-w-[46rem] px-6">
+          <header className="border-b border-ink pb-3 pt-10">
+            <Link href="/" className="block">
+              <h1 className="font-display text-[2.75rem] leading-[0.95] tracking-[-0.02em]">
+                The San Francisco Register
+              </h1>
             </Link>
-            <a
-              href="https://github.com"
-              className="font-mono text-[11px] text-muted hover:text-accent"
-            >
-              about
-            </a>
-          </div>
-        </header>
+            <p className="mt-2 font-mono text-[10.5px] uppercase tracking-[0.14em] text-quiet">
+              Luma · Partiful · Eventbrite — collected every three hours
+            </p>
+          </header>
 
-        <main className="mx-auto max-w-5xl px-5 py-6">{children}</main>
+          {children}
 
-        <footer className="mx-auto max-w-5xl px-5 pb-10 pt-4">
-          <p className="border-t border-line pt-4 font-mono text-[11px] leading-relaxed text-muted">
-            Aggregated from public event pages. Counts are sampled every three hours and
-            recorded only when they change, so a flat line means genuinely no movement.
-            All links point back to the original listing.
-          </p>
-        </footer>
+          <footer className="mt-16 border-t border-rule py-8">
+            <p className="font-display text-[15px] italic leading-relaxed text-quiet">
+              Every listing links back to its original page. Attendance is sampled
+              every three hours and recorded only when it moves, so a single figure
+              means the number has held steady since we first saw it.
+            </p>
+            <p className="mt-3 font-mono text-[10.5px] uppercase tracking-[0.12em] text-faint">
+              A reading of public event pages · Not affiliated with any listed platform
+            </p>
+          </footer>
+        </div>
       </body>
     </html>
   );
