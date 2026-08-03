@@ -304,9 +304,37 @@ Fixtures are frozen sample responses committed to the repo. `vitest` asserts tha
 | `buildId` rotation | Partiful breaks on every deploy | Never hardcoded; re-scrape and retry is routine |
 | Cross-posted events inflate counts | Trend analysis skewed | Handled by §6; `event_sources` preserves the fact that an event appeared on two platforms, which is itself a signal |
 
-Explicit uncertainty: the 41/65 gap has been observed on single fetches only, never over time. Whether 3-hourly accumulation closes it is the first empirical question the pipeline should answer, and it should be answered with data before any host-graph crawling or search-engine backfill is built.
+**Answered 2026-08-02.** Two cycles roughly an hour apart fetched 42 and then 41 Partiful
+events and accumulated **47 distinct** — so the feed does rotate and accumulation does close
+the gap. Single-cycle coverage 0.63 became 0.72 accumulated after two runs. Eventbrite behaved
+the same way: 996 + 996 fetched, 1014 accumulated. Host-graph snowballing and search-engine
+backfill are therefore **not** needed to reach usable Partiful coverage; time does the work.
+Re-measure after a week before considering either.
+
+Original framing, kept for the record: the 41/65 gap had been observed on single fetches only, never over time. Whether 3-hourly accumulation closes it is the first empirical question the pipeline should answer, and it should be answered with data before any host-graph crawling or search-engine backfill is built.
 
 The measurement history is itself a caution. The first pass at this number summed the four pools and reported 52; deduplicating gives 41. Every coverage figure in this document is a deduped unique count, and any future number quoted here should state which it is.
+
+---
+
+## 9a. Write performance
+
+The first live cycle wrote 1821 events in **14m07s at 1% CPU** — roughly 12,700 sequential
+round trips against the Supabase session pooler, essentially all latency. Batched writes
+(`src/db/batch.ts`, 500 rows per batch) brought a full cycle to **47s**, of which ~45s is
+network collection; the write phase is about two seconds.
+
+The batch path deliberately keeps a per-row fallback. A failing batch is retried row by row
+through the original single-row writer, so one malformed row drops only itself instead of
+taking up to 499 good events with it. Fallback counts and outright failures land in the run
+report's `driftSignals`, and any failure degrades the run — persistence problems are visible,
+not silent.
+
+Two Postgres details worth remembering:
+- Event UUIDs are generated client-side. `insert ... returning` cannot map generated ids back
+  to input rows, and client-side ids remove the need to read anything back.
+- Hosts are deduplicated per batch. `on conflict do update` cannot touch the same row twice in
+  one statement, which one organiser hosting several events in a batch would otherwise trigger.
 
 ---
 
