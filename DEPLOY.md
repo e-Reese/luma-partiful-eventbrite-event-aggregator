@@ -42,6 +42,23 @@ alter default privileges in schema public grant select on tables to web_reader;
 
 then point Vercel's `DATABASE_URL` at `web_reader` instead of `postgres`.
 
+## Analytics
+
+Vercel Web Analytics is on, mounted in `web/components/analytics.tsx`. Pageviews
+only: `track()` custom events need a Pro plan, and this project is on Hobby
+(50,000 events a month included).
+
+Enabling it in the dashboard is not enough on its own — the script is wired into
+a deployment at build time, so anything deployed before you switch it on serves
+`/_vercel/insights/script.js` as a 404. Redeploy, then confirm:
+
+```
+curl -o /dev/null -w '%{http_code}\n' https://sf-register.vercel.app/_vercel/insights/script.js
+```
+
+Note that no beacon is sent from an automated browser: the script checks
+`navigator.webdriver` and stays quiet. Headless QA runs will never show up.
+
 ## After deploying
 
 - The site shows whatever the last cron cycle wrote; it has no cache of its own
