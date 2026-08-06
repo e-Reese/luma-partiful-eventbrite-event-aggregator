@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
 import { Instrument_Serif, Inter } from 'next/font/google';
 import Link from 'next/link';
+import { Analytics } from '@/components/analytics';
 import './globals.css';
 
 const display = Instrument_Serif({
@@ -47,6 +48,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             </p>
           </footer>
         </div>
+        <Analytics />
       </body>
     </html>
   );

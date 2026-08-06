@@ -1,7 +1,7 @@
 import { query } from './db';
+import { SOURCES, type Source } from './sources';
 
-export const SOURCES = ['luma', 'partiful', 'eventbrite'] as const;
-export type Source = (typeof SOURCES)[number];
+export { SOURCES, type Source };
 
 export type SortKey = 'soonest' | 'popular' | 'newest';
 
