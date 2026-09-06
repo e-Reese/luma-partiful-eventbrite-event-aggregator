@@ -33,15 +33,21 @@ describe('cycle.sh under cron', () => {
     expect(status).toBe(0);
   });
 
-  it('reports the npm it resolved, and that npm actually runs', () => {
+  // node, npm and bun are all installed by shell-profile tooling (nvm, the bun
+  // installer), so none of them are on cron's PATH by default. bun matters
+  // because the Eventbrite collector drives a real browser through BROWSE_BIN,
+  // which is a Bun executable that re-spawns itself with `bun` — without it,
+  // Eventbrite drops out of every cycle and takes ~90% of the dataset with it.
+  it.each(['node', 'npm', 'bun'])('resolves %s, and it actually runs', (tool) => {
     const { stdout } = runAsCron(['--preflight']);
 
-    const resolved = stdout.match(/^npm:\s+(\S+)$/m)?.[1];
-    expect(resolved, `no "npm: <path>" line in preflight output:\n${stdout}`).toBeTruthy();
+    const resolved = stdout.match(new RegExp(`^${tool}:\\s+(\\S+)$`, 'm'))?.[1];
+    expect(resolved, `no "${tool}: <path>" line in preflight output:\n${stdout}`).toBeTruthy();
 
     const version = spawnSync(resolved!, ['--version'], { encoding: 'utf8' });
     expect(version.status).toBe(0);
-    expect(version.stdout.trim()).toMatch(/^\d+\.\d+\.\d+/);
+    // node prints "v24.14.1"; npm and bun print a bare "1.2.3".
+    expect(version.stdout.trim()).toMatch(/^v?\d+\.\d+\.\d+/);
   });
 
   it('preflight does not start a collection cycle', () => {
