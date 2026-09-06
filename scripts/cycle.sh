@@ -1,9 +1,14 @@
 #!/usr/bin/env bash
 # One collection cycle. Intended for cron:
 #   0 */3 * * * $HOME/workspaces/event_scraper/scripts/cycle.sh
+#
+# Run with --preflight to check the environment and exit without collecting.
 set -euo pipefail
 
 cd "$(dirname "$0")/.."
+
+preflight=0
+[ "${1:-}" = "--preflight" ] && preflight=1
 
 if [ ! -f .env ]; then
   echo "cycle: .env missing — copy .env.example and set DATABASE_URL" >&2
@@ -17,5 +22,61 @@ if [ -z "${DATABASE_URL:-}" ]; then
   exit 1
 fi
 
+# cron does not read shell profiles. ~/.zshrc never runs, so an nvm-managed
+# node is absent from cron's PATH and `npm` resolves to nothing — which is
+# invisible from an interactive shell, and lands in the log below rather than
+# on a terminal. Resolve the toolchain explicitly instead of assuming it.
+if ! command -v npm >/dev/null 2>&1; then
+  nvm_dir="${NVM_DIR:-$HOME/.nvm}"
+
+  # Prefer the version nvm itself would select, so cron matches the shell.
+  if [ -s "$nvm_dir/nvm.sh" ]; then
+    set +eu
+    # shellcheck disable=SC1090,SC1091
+    . "$nvm_dir/nvm.sh" --no-use >/dev/null 2>&1
+    nvm use --silent default >/dev/null 2>&1 || nvm use --silent node >/dev/null 2>&1
+    set -eu
+  fi
+
+  # nvm.sh is not always sourceable in a non-interactive shell. Fall back to
+  # the newest installed version, then to the usual system locations.
+  if ! command -v npm >/dev/null 2>&1; then
+    newest_nvm=$(ls -d "$nvm_dir"/versions/node/*/bin 2>/dev/null | sort -V | tail -1 || true)
+    for dir in "$newest_nvm" /opt/homebrew/bin /usr/local/bin; do
+      if [ -n "$dir" ] && [ -x "$dir/npm" ]; then
+        PATH="$dir:$PATH"
+        export PATH
+        break
+      fi
+    done
+  fi
+fi
+
+if ! command -v npm >/dev/null 2>&1; then
+  echo "cycle: no npm on PATH, and none found under ${NVM_DIR:-$HOME/.nvm}," \
+       "/opt/homebrew/bin or /usr/local/bin — cron cannot run the pipeline" >&2
+  exit 127
+fi
+
+if [ "$preflight" = 1 ]; then
+  echo "node: $(command -v node)"
+  echo "npm: $(command -v npm)"
+  echo "cycle: preflight ok"
+  exit 0
+fi
+
 mkdir -p "$HOME/.local/state"
-npm run cycle >> "$HOME/.local/state/event_scraper.log" 2>&1
+log="$HOME/.local/state/event_scraper.log"
+
+set +e
+npm run cycle >> "$log" 2>&1
+status=$?
+set -e
+
+if [ "$status" -ne 0 ]; then
+  # Redirecting everything into the log is what hid 107 consecutive failures.
+  # Put the failure on stderr too, so cron's own mail carries it.
+  echo "cycle: FAILED (exit $status) — last lines of $log:" >&2
+  tail -5 "$log" >&2
+  exit "$status"
+fi
